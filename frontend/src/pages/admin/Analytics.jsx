@@ -1,22 +1,19 @@
 import { useEffect, useState, useMemo } from "react";
-import { AnalyticsAPI } from "../../api/analytics"; // Ensure this uses the updated analytics.js
+import { AnalyticsAPI } from "../../api/analytics";
 import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  ArcElement,
   Tooltip,
-  Line,
-  CartesianGrid,
   Legend,
-  PieChart,
-  Pie,
-  Cell,
-  LineChart,
-} from "recharts";
+} from "chart.js";
+import { Bar, Pie, Line } from "react-chartjs-2";
 
-const COLORS = ["#10B981", "#EF4444", "#F59E0B", "#4F46E5", "#8B5CF6"]; // Adjusted order for status
+const COLORS = ["#10B981", "#EF4444", "#F59E0B", "#4F46E5", "#8B5CF6"];
 
 // Helper to format currency
 const formatCurrency = (value) =>
@@ -25,24 +22,56 @@ const formatCurrency = (value) =>
     maximumFractionDigits: 0,
   })}`;
 
-// --- Linear regression helper (no changes needed) ---
+// Linear regression helper (same as your previous version)
 function linearRegression(data, yKey) {
-  // ... (same as before)
+  const n = data.length;
+  const x = [];
+  const y = [];
+  data.forEach((pt, i) => {
+    x.push(i + 1);
+    y.push(pt[yKey] || 0);
+  });
+  const xMean = x.reduce((a, b) => a + b, 0) / n;
+  const yMean = y.reduce((a, b) => a + b, 0) / n;
+  let num = 0;
+  let den = 0;
+  for (let i = 0; i < n; i++) {
+    num += (x[i] - xMean) * (y[i] - yMean);
+    den += (x[i] - xMean) ** 2;
+  }
+  const slope = den === 0 ? 0 : num / den;
+  const intercept = yMean - slope * xMean;
+  const result = data.map((pt, i) => ({
+    ...pt,
+    projected: slope * (i + 1) + intercept,
+  }));
+  return result;
 }
+
+// Register ChartJS components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  ArcElement,
+  Tooltip,
+  Legend
+);
 
 export default function Analytics() {
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
-  // Renamed filterStatus to trendStatus, default to 'closed'
   const [trendStatus, setTrendStatus] = useState("closed");
-  const [trendDateField, setTrendDateField] = useState("closingDate"); // Default date field for trends
+  const [trendDateField, setTrendDateField] = useState("closingDate");
 
   const [dash, setDash] = useState({});
-  const [trend, setTrend] = useState([]); // Raw trend data from API
-  const [propPerf, setPropPerf] = useState([]); // Property performance data
-  const [agentPerf, setAgentPerf] = useState([]); // Agent performance data
+  const [trend, setTrend] = useState([]);
+  const [propPerf, setPropPerf] = useState([]);
+  const [agentPerf, setAgentPerf] = useState([]);
 
-  const [loading, setLoading] = useState(true); // Combined loading state
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -52,30 +81,28 @@ export default function Analytics() {
 
     const fetchData = async () => {
       try {
-        // Updated API calls
         const [dashRes, trendRes, propPerfRes, agentPerfRes] =
           await Promise.all([
-            AnalyticsAPI.dashboard(), // No params needed usually
+            AnalyticsAPI.dashboard(),
             AnalyticsAPI.salesTrends({
               year,
               status: trendStatus,
               dateField: trendDateField,
             }),
-            AnalyticsAPI.propertyPerformance(), // No params needed usually for overview
-            AnalyticsAPI.agentPerformance({ status: "closed" }), // Default to closed sales for agent perf
+            AnalyticsAPI.propertyPerformance(),
+            AnalyticsAPI.agentPerformance({ status: "closed" }),
           ]);
 
         if (!isMounted) return;
 
         setDash(dashRes || {});
-        setTrend(trendRes?.trends || []); // API returns { trends: [...] }
+        setTrend(trendRes?.trends || []);
         setPropPerf(propPerfRes || []);
         setAgentPerf(agentPerfRes || []);
       } catch (err) {
         if (!isMounted) return;
         console.error("Analytics fetch error:", err);
         setError("Failed to load analytics data.");
-        // Clear data on error
         setDash({});
         setTrend([]);
         setPropPerf([]);
@@ -85,28 +112,28 @@ export default function Analytics() {
       }
     };
 
-    // Debounce fetching slightly
     const timer = setTimeout(fetchData, 300);
     return () => {
       isMounted = false;
       clearTimeout(timer);
     };
-  }, [year, trendStatus, trendDateField]); // Re-fetch when filters change
+  }, [year, trendStatus, trendDateField]);
 
-  // --- Derived Data Calculations ---
-
-  // Sales trend data formatted for charts (monthly only for now)
+  // Derived data
   const monthlyTrendData = useMemo(() => {
-    if (!trend || trend.length === 0)
-      return Array(12).fill({ month: "", sales: 0, revenue: 0 }); // Ensure 12 months
-
+    if (!trend || trend.length === 0) {
+      return Array.from({ length: 12 }).map((_, i) => ({
+        month: `M${i + 1}`,
+        sales: 0,
+        revenue: 0,
+      }));
+    }
     const monthMap = new Map();
     for (let i = 1; i <= 12; i++) {
       monthMap.set(i, { month: `M${i}`, sales: 0, revenue: 0 });
     }
     trend.forEach((m) => {
       if (m.month) {
-        // Ensure it's monthly data
         monthMap.set(m.month, {
           month: `M${m.month}`,
           sales: m.count || 0,
@@ -117,25 +144,130 @@ export default function Analytics() {
     return Array.from(monthMap.values());
   }, [trend]);
 
-  // Add projection line to monthly trend data
   const monthlyTrendWithProjection = useMemo(
     () => linearRegression(monthlyTrendData, "revenue"),
     [monthlyTrendData]
   );
 
-  // Unit status distribution from dashboard data
   const unitStatusDistribution = useMemo(
     () =>
       [
         { name: "Available", value: dash.availableUnits || 0 },
         { name: "Sold", value: dash.soldUnits || 0 },
         { name: "Rented", value: dash.rentedUnits || 0 },
-      ].filter((item) => item.value > 0), // Filter out zero values for cleaner chart
+      ].filter((item) => item.value > 0),
     [dash]
   );
 
-  if (error)
+  if (error) {
     return <div className="py-10 text-center text-red-500">{error}</div>;
+  }
+
+  // --- Chart.js data & options
+  const barLineData = {
+    labels: monthlyTrendWithProjection.map((d) => d.month),
+    datasets: [
+      {
+        type: "bar",
+        label: "Sales Count",
+        data: monthlyTrendWithProjection.map((d) => d.sales),
+        backgroundColor: "#4F46E5",
+        yAxisID: "ySales",
+      },
+      {
+        type: "bar",
+        label: "Revenue",
+        data: monthlyTrendWithProjection.map((d) => d.revenue),
+        backgroundColor: "#10B981",
+        yAxisID: "yRevenue",
+      },
+      {
+        type: "line",
+        label: "Projected Revenue",
+        data: monthlyTrendWithProjection.map((d) => d.projected),
+        borderColor: "#F59E0B",
+        borderWidth: 2,
+        fill: false,
+        yAxisID: "yRevenue",
+      },
+    ],
+  };
+
+  const barLineOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      ySales: {
+        type: "linear",
+        position: "left",
+        beginAtZero: true,
+        title: { display: true, text: "Sales Count" },
+      },
+      yRevenue: {
+        type: "linear",
+        position: "right",
+        beginAtZero: true,
+        title: { display: true, text: "Revenue (₱)" },
+        ticks: {
+          callback: (val) => `₱${(val / 1000000).toFixed(1)}M`,
+        },
+        grid: {
+          drawOnChartArea: false,
+        },
+      },
+      x: {
+        title: { display: true, text: "Month" },
+      },
+    },
+    plugins: {
+      legend: { position: "bottom" },
+      tooltip: {
+        callbacks: {
+          label: (context) => {
+            const label = context.dataset.label || "";
+            const value = context.raw;
+            if (label.includes("Revenue")) {
+              return `₱ ${value.toLocaleString()}`;
+            }
+            return `${value}`;
+          },
+        },
+      },
+    },
+  };
+
+  const pieData = {
+    labels: unitStatusDistribution.map((u) => u.name),
+    datasets: [
+      {
+        data: unitStatusDistribution.map((u) => u.value),
+        backgroundColor: unitStatusDistribution.map(
+          (_u, idx) => COLORS[idx % COLORS.length]
+        ),
+        borderColor: "#FFFFFF",
+        borderWidth: 2,
+      },
+    ],
+  };
+
+  const pieOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: "bottom",
+      },
+      tooltip: {
+        callbacks: {
+          label: (context) => {
+            const name = context.label;
+            const value = context.parsed;
+            return `${name}: ${value.toLocaleString()}`;
+          },
+        },
+      },
+    },
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -143,7 +275,7 @@ export default function Analytics() {
         Reports & Analytics
       </h1>
 
-      {/* --- Filters --- */}
+      {/* Filters */}
       <div className="p-4 bg-white border rounded-lg shadow-sm">
         <div className="text-lg font-medium text-gray-700 mb-3">
           Sales Trend Filters
@@ -174,7 +306,6 @@ export default function Analytics() {
             >
               <option value="closed">Closed</option>
               <option value="pending">Pending</option>
-              {/* <option value="cancelled">Cancelled</option> */}
             </select>
           </label>
           <label className="flex items-center gap-2">
@@ -193,15 +324,12 @@ export default function Analytics() {
         </div>
       </div>
 
-      {/* --- KPI Cards --- */}
+      {/* KPIs */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-        {" "}
-        {/* More KPIs */}
         <Kpi title="Total Buildings" value={dash.buildingCount ?? 0} />
         <Kpi title="Total Units" value={dash.totalUnits ?? 0} />
         <Kpi title="Available Units" value={dash.availableUnits ?? 0} />
         <Kpi title="Sold Units" value={dash.soldUnits ?? 0} />
-        {/* <Kpi title="Rented Units" value={dash.rentedUnits ?? 0} /> */}
         <Kpi title="Closed Sales" value={dash.totalClosedSales ?? 0} />
         <Kpi
           title="Total Revenue (Closed)"
@@ -218,105 +346,45 @@ export default function Analytics() {
         <Kpi title="Pending Inquiries" value={dash.pendingInquiries ?? 0} />
       </div>
 
-      {/* --- Charts --- */}
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Bar + Line Chart: Monthly Sales & Revenue */}
         <Card title={`Monthly Sales Performance (${year} - ${trendStatus})`}>
           {loading ? (
             <ChartPlaceholder />
           ) : (
-            <ResponsiveContainer width="100%" height={350}>
-              <BarChart data={monthlyTrendWithProjection}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" fontSize={12} />
-                <YAxis
-                  fontSize={12}
-                  tickFormatter={(val) => `₱${(val / 1000000).toFixed(1)}M`}
-                />
-                <Tooltip
-                  formatter={(value, name) =>
-                    name === "Sales Count" ? value : formatCurrency(value)
-                  }
-                />
-                <Legend />
-                <Bar dataKey="sales" fill="#4F46E5" name="Sales Count" />
-                <Bar dataKey="revenue" fill="#10B981" name="Revenue" />
-                <Line
-                  type="monotone"
-                  dataKey="projected"
-                  stroke="#F59E0B"
-                  strokeWidth={2}
-                  name="Projected Revenue"
-                  dot={false}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            <div className="h-[350px]">
+              <Bar data={barLineData} options={barLineOptions} />
+            </div>
           )}
         </Card>
 
-        {/* Pie Chart: Unit Status Distribution */}
         <Card title="Unit Status Distribution">
           {loading ? (
             <ChartPlaceholder />
           ) : (
-            <ResponsiveContainer width="100%" height={350}>
-              <PieChart>
-                <Pie
-                  data={unitStatusDistribution}
-                  dataKey="value"
-                  nameKey="name"
-                  labelLine={false}
-                  label={({ name, percent }) =>
-                    `${name} ${(percent * 100).toFixed(0)}%`
-                  }
-                  outerRadius={110}
-                  cy="50%" // Center vertically
-                >
-                  {unitStatusDistribution.map((entry, idx) => (
-                    <Cell
-                      key={`cell-${idx}`}
-                      fill={COLORS[idx % COLORS.length]}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value) => value.toLocaleString()} />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
+            <div className="h-[350px]">
+              <Pie data={pieData} options={pieOptions} />
+            </div>
           )}
         </Card>
       </div>
 
-      {/* --- Property Performance Table --- */}
+      {/* Property Performance Table */}
       <Card title="Property Performance (Based on Closed Sales)">
         {loading ? (
-          <TablePlaceholder rows={5} cols={6} />
+          <TablePlaceholder rows={5} cols={7} />
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full w-full text-sm text-left text-gray-600">
               <thead className="text-xs text-gray-700 uppercase bg-gray-100">
                 <tr>
-                  <th scope="col" className="px-4 py-3">
-                    Property
-                  </th>
-                  <th scope="col" className="px-4 py-3">
-                    Total Units
-                  </th>
-                  <th scope="col" className="px-4 py-3">
-                    Available
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-right">
-                    Closed Sales
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-right">
-                    Total Revenue
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-right">
-                    Avg. Price
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-right">
-                    Commission Paid
-                  </th>
+                  <th className="px-4 py-3">Property</th>
+                  <th className="px-4 py-3">Total Units</th>
+                  <th className="px-4 py-3">Available</th>
+                  <th className="px-4 py-3 text-right">Closed Sales</th>
+                  <th className="px-4 py-3 text-right">Total Revenue</th>
+                  <th className="px-4 py-3 text-right">Avg. Price</th>
+                  <th className="px-4 py-3 text-right">Commission Paid</th>
                 </tr>
               </thead>
               <tbody>
@@ -362,7 +430,7 @@ export default function Analytics() {
         )}
       </Card>
 
-      {/* --- Agent Performance Table --- */}
+      {/* Agent Performance Table */}
       <Card title="Agent Performance (Based on Closed Sales)">
         {loading ? (
           <TablePlaceholder rows={3} cols={5} />
@@ -371,21 +439,11 @@ export default function Analytics() {
             <table className="min-w-full w-full text-sm text-left text-gray-600">
               <thead className="text-xs text-gray-700 uppercase bg-gray-100">
                 <tr>
-                  <th scope="col" className="px-4 py-3">
-                    Agent Name
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-right">
-                    Closed Sales
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-right">
-                    Total Revenue
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-right">
-                    Avg. Sale Price
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-right">
-                    Total Commission
-                  </th>
+                  <th className="px-4 py-3">Agent Name</th>
+                  <th className="px-4 py-3 text-right">Closed Sales</th>
+                  <th className="px-4 py-3 text-right">Total Revenue</th>
+                  <th className="px-4 py-3 text-right">Avg. Sale Price</th>
+                  <th className="px-4 py-3 text-right">Total Commission</th>
                 </tr>
               </thead>
               <tbody>
@@ -428,7 +486,7 @@ export default function Analytics() {
   );
 }
 
-// --- Reusable Components ---
+// --- Reusable components ---
 function Kpi({ title, value }) {
   return (
     <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
@@ -451,7 +509,6 @@ function Card({ title, children }) {
   );
 }
 
-// Placeholder for charts while loading
 function ChartPlaceholder() {
   return (
     <div className="flex items-center justify-center h-[350px] bg-gray-50 rounded text-gray-400">
@@ -459,17 +516,15 @@ function ChartPlaceholder() {
     </div>
   );
 }
-// Placeholder for tables while loading
+
 function TablePlaceholder({ rows = 3, cols = 4 }) {
   return (
-    <div className="animate-pulse">
-      {/* Header */}
-      <div className="h-10 bg-gray-200 rounded mb-2"></div>
-      {/* Rows */}
+    <div className="animate-pulse space-y-1">
+      <div className="h-8 bg-gray-200 rounded mb-2"></div>
       {Array.from({ length: rows }).map((_, i) => (
         <div
           key={i}
-          className={`h-8 bg-gray-100 rounded mb-1 ${
+          className={`h-8 bg-gray-100 rounded ${
             i % 2 === 0 ? "opacity-75" : ""
           }`}
         ></div>

@@ -1,66 +1,58 @@
-import { useEffect, useState, useMemo } from "react"; // 1. Import useMemo
+import { useEffect, useState, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { PropertiesAPI } from "../../api/properties";
 import InquiryForm from "../../components/layout/InquiryForm";
 
 export default function PropertyDetail() {
   const { id } = useParams();
-  const [p, setP] = useState(null); // 'p' is now the Property (Building)
+  const [p, setP] = useState(null);
   const [lightbox, setLightbox] = useState({ open: false, index: 0 });
 
   async function load() {
-    const item = await PropertiesAPI.get(id); // This correctly gets the Property + Units
+    const item = await PropertiesAPI.get(id);
     setP(item);
     PropertiesAPI.incrementView(id).catch(() => {});
   }
 
   useEffect(() => {
-    // Check for ID before loading
-    if (id) {
-      load();
-    }
+    if (id) load();
   }, [id]);
 
-  // 2. Group the available units using useMemo
+  // 🧠 Group available units
   const groupedUnits = useMemo(() => {
     if (!p?.units) return [];
 
     const availableUnits = p.units.filter((u) => u.status === "available");
 
-    // Use reduce to group units.
     const groups = availableUnits.reduce((acc, unit) => {
-      const { specifications, price } = unit;
+      const { specifications, price, photos = [] } = unit;
       const {
         bedrooms = 0,
         bathrooms = 0,
         floorArea = 0,
       } = specifications || {};
 
-      // Create a unique key for each "type" of unit
       const key = `beds-${bedrooms}-baths-${bathrooms}-sqm-${floorArea}`;
 
       if (!acc[key]) {
-        // First time seeing this unit type, create a new group
         acc[key] = {
           key,
           specifications,
           count: 0,
           minPrice: price,
+          photos: [],
         };
       }
 
-      // Update the group
       acc[key].count += 1;
-      if (price < acc[key].minPrice) {
-        acc[key].minPrice = price;
-      }
+      acc[key].photos.push(...photos);
+      if (price < acc[key].minPrice) acc[key].minPrice = price;
 
       return acc;
     }, {});
 
-    // Convert the groups object back into an array
     return Object.values(groups);
-  }, [p?.units]); // This calculation only re-runs when the units change
+  }, [p?.units]);
 
   if (!p) return <div className="py-10 container-page">Loading...</div>;
 
@@ -88,8 +80,7 @@ export default function PropertyDetail() {
 
       <div className="grid lg:grid-cols-[1fr_320px] gap-6">
         <div>
-          {/* ... (Main Image, Thumbnail Grid, Property Info, Video, Description all stay the same) ... */}
-          {/* 🏠 Main Image (of the Building) */}
+          {/* 🏠 Main Image */}
           <div
             className="relative cursor-pointer group"
             onClick={() => openLightbox(0)}
@@ -107,7 +98,7 @@ export default function PropertyDetail() {
             </div>
           </div>
 
-          {/* 🖼️ Thumbnail Grid (of the Building) */}
+          {/* 🖼️ Thumbnail Grid */}
           {photos?.length > 1 && (
             <div className="grid grid-cols-4 gap-2 mt-2">
               {photos.slice(1, 5).map((ph, i) => (
@@ -122,7 +113,7 @@ export default function PropertyDetail() {
             </div>
           )}
 
-          {/* Property Info (Building Info) */}
+          {/* Property Info */}
           <div className="flex items-center justify-between mt-4">
             <div>
               <h1 className="text-xl font-semibold">{p.propertyName}</h1>
@@ -137,7 +128,7 @@ export default function PropertyDetail() {
             )}
           </div>
 
-          {/* Video Tour (of the Building) */}
+          {/* Video Tour */}
           {p.videoTours?.[0] && (
             <div className="mt-6">
               <h3 className="mb-2 font-medium">Property video tour</h3>
@@ -153,13 +144,13 @@ export default function PropertyDetail() {
             </div>
           )}
 
-          {/* Description (of the Building) */}
+          {/* Description */}
           <div className="mt-6">
             <h3 className="mb-2 font-medium">Description</h3>
             <p className="text-sm text-neutral-700">{p.description || "—"}</p>
           </div>
 
-          {/* 3. UPDATED "Available Units" Section */}
+          {/* 🏘️ Available Units */}
           <div className="mt-6">
             <h3 className="mb-2 font-medium">Available Units</h3>
             <div className="space-y-3">
@@ -175,7 +166,7 @@ export default function PropertyDetail() {
             </div>
           </div>
 
-          {/* Amenities (of the Building) */}
+          {/* Amenities */}
           {p.amenities?.length > 0 && (
             <div className="mt-6">
               <h3 className="mb-2 font-medium">Amenities</h3>
@@ -192,7 +183,7 @@ export default function PropertyDetail() {
             </div>
           )}
 
-          {/* Site Map (of the Building) */}
+          {/* Site Map */}
           {p.siteMap?.url && (
             <div className="mt-6">
               <h3 className="mb-2 font-medium">Site Development Plan</h3>
@@ -277,9 +268,10 @@ export default function PropertyDetail() {
   );
 }
 
-// 4. RENAMED and UPDATED component to render a Unit *Group*
+// 🏘️ UnitGroupCard with carousel support
 function UnitGroupCard({ group }) {
-  const { specifications, count, minPrice } = group;
+  const { specifications, count, minPrice, photos = [] } = group;
+  const [index, setIndex] = useState(0);
   const {
     bedrooms = 0,
     bathrooms = 0,
@@ -288,7 +280,6 @@ function UnitGroupCard({ group }) {
     parking = 0,
   } = specifications || {};
 
-  // Create a title for the group
   let title = "Unit";
   if (bedrooms > 0) {
     title = `${bedrooms} Bedroom ${
@@ -300,17 +291,59 @@ function UnitGroupCard({ group }) {
     title = `${lotArea} sqm Lot`;
   }
 
+  const hasPhotos = photos && photos.length > 0;
+
   return (
-    <div className="p-4 card">
+    <div className="p-4 card space-y-3">
       <div className="flex items-center justify-between">
         <div className="text-lg font-semibold text-brand-primary">{title}</div>
         <span className="badge badge-green">{count} Available</span>
       </div>
+
       <div className="font-semibold text-brand-primary">
         Starting from: ₱ {Number(minPrice || 0).toLocaleString()}
       </div>
 
-      <div className="grid gap-2 p-3 mt-3 text-sm rounded bg-gray-50 md:grid-cols-3">
+      {/* 🖼️ Carousel for unit photos */}
+      {hasPhotos && (
+        <div className="relative w-full overflow-hidden rounded-lg h-56 bg-gray-100">
+          <img
+            src={photos[index]}
+            className="object-cover w-full h-full transition-all"
+            alt={`Unit photo ${index + 1}`}
+          />
+          {photos.length > 1 && (
+            <>
+              <button
+                onClick={() =>
+                  setIndex((index - 1 + photos.length) % photos.length)
+                }
+                className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 text-white rounded-full px-2 py-1 text-lg"
+              >
+                ‹
+              </button>
+              <button
+                onClick={() => setIndex((index + 1) % photos.length)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 text-white rounded-full px-2 py-1 text-lg"
+              >
+                ›
+              </button>
+              <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1">
+                {photos.map((_, i) => (
+                  <div
+                    key={i}
+                    className={`w-2 h-2 rounded-full ${
+                      i === index ? "bg-white" : "bg-white/40"
+                    }`}
+                  ></div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      <div className="grid gap-2 p-3 text-sm rounded bg-gray-50 md:grid-cols-3">
         {lotArea > 0 && (
           <div>
             Lot Area: <strong>{lotArea} sqm</strong>
