@@ -161,7 +161,7 @@ export default function Analytics() {
         yAxisID: "yRevenue",
       },
       {
-        type: "line",
+        type: "linear",
         label: "Projected Revenue",
         data: monthlyTrendWithProjection.map((d) => d.projected),
         borderColor: "#F59E0B",
