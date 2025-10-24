@@ -2,6 +2,32 @@ import { useEffect, useState } from "react";
 import { AnalyticsAPI } from "../../api/analytics";
 import { toast } from "react-toastify";
 
+// ✅ Import and register Chart.js (fixes "line is not a registered controller")
+import {
+  Chart as ChartJS,
+  LineElement,
+  BarElement,
+  PointElement,
+  CategoryScale,
+  LinearScale,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement,
+} from "chart.js";
+
+ChartJS.register(
+  LineElement,
+  BarElement,
+  PointElement,
+  CategoryScale,
+  LinearScale,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement
+);
+
 export default function Dashboard() {
   const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
