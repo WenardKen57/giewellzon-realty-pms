@@ -6,7 +6,7 @@ export default function Footer() {
   if (loc.pathname.startsWith("/admin")) return null;
 
   return (
-    <footer className="mt-12 bg-brand-primary text-brand-white">
+    <footer className=" bg-brand-primary text-brand-white">
       <div className="grid gap-8 py-10 container-page md:grid-cols-4">
         <div>
           <div className="text-lg font-semibold text-white">GIEWELLZON</div>

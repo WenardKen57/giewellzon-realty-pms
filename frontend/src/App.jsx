@@ -36,13 +36,13 @@ export default function App() {
         {/* PUBLIC ROUTES */}
         <Route
           element={
-            <>
+            <div className="flex flex-col min-h-screen">
               <PublicNavbar />
-              <main className="flex-1">
+              <main className="flex-grow">
                 <Outlet />
               </main>
               <Footer />
-            </>
+            </div>
           }
         >
           <Route path="/" element={<Home />} />
