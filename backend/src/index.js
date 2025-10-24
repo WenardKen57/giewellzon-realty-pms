@@ -24,7 +24,10 @@ const app = express();
 app.use(helmet());
 app.use(
   cors({
-    origin: (process.env.CORS_ORIGINS || "").split(","),
+    origin: [
+      "https://giewellzon-realty-pms-1.onrender.com",
+      "http://localhost:5173",
+    ],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
   })
