@@ -1,0 +1,5 @@
+/* If you opt NOT to use Tailwind, you could define a minimal framework here. */
+body {
+  margin:0;
+  font-family: system-ui,-apple-system,"Segoe UI",Roboto,Ubuntu,"Helvetica Neue",Arial;
+}
