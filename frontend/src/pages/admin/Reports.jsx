@@ -1,120 +1,97 @@
-import { useState } from "react"; // Import useState
-import { ReportsAPI } from "../../api/reports"; // Ensure this uses the updated reports.js
-import { toast } from "react-toastify"; // Use toast instead of notify
+import { useState } from "react";
+import { ReportsAPI } from "../../api/reports";
+import { toast } from "react-toastify";
 
 export default function Reports() {
-  const [loading, setLoading] = useState({}); // Track loading state per button
-
-  // Example: Add state for report filters if needed
-  const [reportFilters, setReportFilters] = useState({
+  const [loading, setLoading] = useState({});
+  const [filters, setFilters] = useState({
     salesStatus: "closed",
     agentStatus: "closed",
-    // Add date ranges etc. if you build UI for them
   });
 
-  const handleDownload = async (apiFn, reportName, params = {}) => {
-    setLoading((prev) => ({ ...prev, [reportName]: true })); // Set loading for this report
+  const handleDownload = async (apiFn, key, params = {}) => {
+    setLoading((prev) => ({ ...prev, [key]: true }));
     try {
-      // Pass filter params to the API function
       await apiFn(params);
-      // Success message is usually handled by the browser download prompt
-      // toast.success(`${reportName} download started.`);
     } catch (err) {
-      // Catch should ideally not be needed if downloadCsv handles errors
-      console.error(`Download failed for ${reportName}:`, err);
-      toast.error(`${reportName} download failed.`);
+      console.error(`${key} download failed:`, err);
+      toast.error(`${key} download failed.`);
     } finally {
-      setLoading((prev) => ({ ...prev, [reportName]: false })); // Clear loading
+      setLoading((prev) => ({ ...prev, [key]: false }));
     }
   };
 
   return (
     <div className="p-6 space-y-6">
-      {" "}
-      {/* Added spacing */}
-      <h1 className="text-2xl font-semibold text-gray-800">
+      <h1 className="text-2xl font-semibold text-brand-primary">
         Reports & Exports
       </h1>
-      {/* Optional: Add Filter UI for Reports Here */}
-      {/* Example:
-       <div className="p-4 space-y-3 bg-white border rounded-lg shadow-sm">
-           <div className="text-lg font-medium text-gray-700">Report Filters</div>
-            <label>Sales Report Status:
-                <select value={reportFilters.salesStatus} onChange={e => setReportFilters(f => ({...f, salesStatus: e.target.value}))}>
-                    <option value="closed">Closed</option>
-                    <option value="pending">Pending</option>
-                    <option value="cancelled">Cancelled</option>
-                </select>
-            </label>
-            // Add date filters etc.
-       </div>
-      */}
+
       <div className="max-w-md p-6 bg-white border rounded-lg shadow-sm space-y-4">
-        {" "}
-        {/* Constrained width */}
         <p className="text-sm text-gray-600">
-          Download latest CSV snapshots for data analysis or offline archiving.
+          Download the latest CSV snapshots for analysis or archiving.
         </p>
+
         <div className="flex flex-col gap-3">
-          <button
-            className="btn btn-outline justify-start" // Left align text
+          <ReportButton
+            label="Sales Report"
+            loading={loading["Sales Report"]}
             onClick={() =>
               handleDownload(ReportsAPI.sales, "Sales Report", {
-                status: reportFilters.salesStatus,
+                status: filters.salesStatus,
               })
-            } // Pass filters
-            disabled={loading["Sales Report"]}
-          >
-            {loading["Sales Report"]
-              ? "Generating..."
-              : "Download Sales Report"}
-          </button>
-          <button
-            className="btn btn-outline justify-start"
+            }
+          />
+
+          <ReportButton
+            label="Buildings Report"
+            loading={loading["Buildings Report"]}
             onClick={() =>
               handleDownload(ReportsAPI.properties, "Buildings Report")
             }
-            disabled={loading["Buildings Report"]}
-          >
-            {loading["Buildings Report"]
-              ? "Generating..."
-              : "Download Buildings Report"}
-          </button>
-          <button
-            className="btn btn-outline justify-start"
+          />
+
+          <ReportButton
+            label="Units Report"
+            loading={loading["Units Report"]}
             onClick={() => handleDownload(ReportsAPI.units, "Units Report")}
-            disabled={loading["Units Report"]}
-          >
-            {loading["Units Report"]
-              ? "Generating..."
-              : "Download Units Report"}
-          </button>
-          <button
-            className="btn btn-outline justify-start"
+          />
+
+          <ReportButton
+            label="Inquiries Report"
+            loading={loading["Inquiries Report"]}
             onClick={() =>
               handleDownload(ReportsAPI.inquiries, "Inquiries Report")
             }
-            disabled={loading["Inquiries Report"]}
-          >
-            {loading["Inquiries Report"]
-              ? "Generating..."
-              : "Download Inquiries Report"}
-          </button>
-          <button
-            className="btn btn-outline justify-start"
+          />
+
+          <ReportButton
+            label="Agent Performance Report"
+            loading={loading["Agent Performance Report"]}
             onClick={() =>
               handleDownload(ReportsAPI.agents, "Agent Performance Report", {
-                status: reportFilters.agentStatus,
+                status: filters.agentStatus,
               })
-            } // Pass filters
-            disabled={loading["Agent Performance Report"]}
-          >
-            {loading["Agent Performance Report"]
-              ? "Generating..."
-              : "Download Agent Performance Report"}
-          </button>
+            }
+          />
         </div>
       </div>
     </div>
+  );
+}
+
+function ReportButton({ label, loading, onClick }) {
+  return (
+    <button
+      className={`flex items-center justify-start px-4 py-2 border rounded-md text-sm font-medium hover:bg-brand-primary hover:text-white transition ${
+        loading
+          ? "bg-gray-100 text-gray-500 cursor-not-allowed"
+          : "bg-white text-gray-700"
+      }`}
+      onClick={onClick}
+      disabled={loading}
+    >
+      {loading ? "Generating..." : `Download ${label}`}
+    </button>
   );
 }

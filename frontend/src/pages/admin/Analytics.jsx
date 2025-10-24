@@ -2,16 +2,33 @@ import { useEffect, useState, useMemo } from "react";
 import { AnalyticsAPI } from "../../api/analytics";
 import {
   Chart as ChartJS,
+  LineElement,
+  BarElement,
   CategoryScale,
   LinearScale,
-  BarElement,
-  LineElement,
   PointElement,
-  ArcElement,
+  Title,
   Tooltip,
   Legend,
+  Filler,
+  ArcElement,
 } from "chart.js";
+
 import { Bar, Pie, Line } from "react-chartjs-2";
+
+// ✅ Register once only
+ChartJS.register(
+  LineElement,
+  BarElement,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+  ArcElement
+);
 
 const COLORS = ["#10B981", "#EF4444", "#F59E0B", "#4F46E5", "#8B5CF6"];
 
