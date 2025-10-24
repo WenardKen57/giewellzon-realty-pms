@@ -24,12 +24,12 @@ const app = express();
 app.use(helmet());
 app.use(
   cors({
-    origin: (process.env.CORS_ORIGINS || "http://localhost:5173")
-      .split(",")
-      .map((s) => s.trim()),
-    credentials: false,
+    origin: (process.env.CORS_ORIGINS || "").split(","),
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    credentials: true,
   })
 );
+
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
