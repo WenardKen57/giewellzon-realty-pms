@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react"; // Added useCallback
 import {
   Modal,
   View,
@@ -19,10 +19,12 @@ import {
   uploadPhotos,
 } from "../../api/properties";
 import PickerModal from "../../components/PickerModal";
-import { getProvinces, getCities } from "../../api/locations";
+// Removed getProvinces, getCities
 import { toAbsoluteUrl } from "../../api/client";
 import { notifyError, notifySuccess } from "../../utils/notify";
+import { Ionicons } from "@expo/vector-icons"; // Added Ionicons
 
+// Property Types for the Building/Complex itself
 const PROPERTY_TYPES = [
   "house",
   "condo",
@@ -35,78 +37,68 @@ const PROPERTY_TYPES = [
 
 export default function EditPropertyModal({ route, navigation }) {
   const { property } = route.params;
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(0); // Simplified to 2 steps: Basic, Media
   const [saving, setSaving] = useState(false);
 
-  // --- FIX: Aligned state with backend model ---
+  // --- Form state aligned with Property model ---
   const [form, setForm] = useState({
-    propertyName: property.propertyName || "", // <-- FIX: Was 'name'
-    description: property.description || "",
-    street: property.street || "",
-    location: property.location || "",
-    city: property.city || "",
-    province: property.province || "",
-    price: String(property.price || 0),
-    status: property.status || "available", // <-- FIX: Read from property.status
-    propertyType: property.propertyType || "house",
-    specifications: {
-      floorArea: String(property.specifications?.floorArea || 0),
-      bedrooms: String(property.specifications?.bedrooms || 0),
-      bathrooms: String(property.specifications?.bathrooms || 0),
-    },
-    amenities: property.amenities || [],
-    videoTours: property.videoTours || [],
-    numberOfUnit: String(property.numberOfUnit || 0), // <-- FIX: Was 'availableUnits'
-    more: property.more || "",
+    propertyName: property?.propertyName || "",
+    description: property?.description || "", // Keep description for building
+    street: property?.street || "",
+    location: property?.location || "", // Additional location notes
+    city: property?.city || "", // Text input
+    province: property?.province || "", // Text input
+    propertyType: property?.propertyType || "house", // Type of building/complex
+    amenities: property?.amenities || [], // Keep building amenities
+    videoTours: property?.videoTours || [],
+    // Removed price, status, specifications, numberOfUnit, more
   });
 
   // Previews for existing media
-  const [thumbPreview, setThumbPreview] = useState(property.thumbnail || null); // <-- FIX: Was property.thumbnail?.url
-  const [photosPreview, setPhotosPreview] = useState(property.photos || []); // This is string[]
+  const [thumbPreview, setThumbPreview] = useState(property?.thumbnail || null);
+  const [photosPreview, setPhotosPreview] = useState(property?.photos || []);
 
   // New media to be uploaded
-  const [newThumb, setNewThumb] = useState(null); // { uri, name, type }
-  const [newPhotos, setNewPhotos] = useState([]); // Array of { uri, name, type }
+  const [newThumb, setNewThumb] = useState(null);
+  const [newPhotos, setNewPhotos] = useState([]);
 
-  const [provinces, setProvinces] = useState([]);
-  const [cities, setCities] = useState([]);
-  const [loadingCities, setLoadingCities] = useState(false);
-
-  // --- Location Data Fetching ---
-  useEffect(() => {
-    (async () => {
-      try {
-        const provData = await getProvinces();
-        setProvinces(provData.map((p) => ({ label: p, value: p })));
-      } catch {}
-    })();
-  }, []);
-
-  useEffect(() => {
-    const fetchCities = async () => {
-      if (form.province) {
-        setLoadingCities(true);
-        try {
-          const cityData = await getCities(form.province);
-          setCities(cityData.map((c) => ({ label: c, value: c })));
-        } catch {
-          setCities([]);
-        }
-        setLoadingCities(false);
-      } else {
-        setCities([]);
-      }
-    };
-    fetchCities();
-  }, [form.province]);
+  // --- Removed state for provinces, cities, pickers ---
 
   const [videoUrl, setVideoUrl] = useState("");
-  const [typePickerOpen, setTypePickerOpen] = useState(false);
-  const [provPickerOpen, setProvPickerOpen] = useState(false);
-  const [cityPickerOpen, setCityPickerOpen] = useState(false);
+  const [typePickerOpen, setTypePickerOpen] = useState(false); // Only type picker needed
 
+  // --- State for single amenity input ---
+  const [currentAmenity, setCurrentAmenity] = useState("");
+  // ------------------------------------
+
+  // Update form if property prop changes
+  useEffect(() => {
+    if (property) {
+      setForm({
+        propertyName: property.propertyName || "",
+        description: property.description || "",
+        street: property.street || "",
+        location: property.location || "",
+        city: property.city || "",
+        province: property.province || "",
+        propertyType: property.propertyType || "house",
+        amenities: property.amenities || [], // Ensure amenities are loaded
+        videoTours: property.videoTours || [],
+      });
+      // Reset media previews based on initial property data
+      setThumbPreview(property.thumbnail || null);
+      setPhotosPreview(property.photos || []);
+      // Clear any newly selected files from previous edits
+      setNewThumb(null);
+      setNewPhotos([]);
+      setCurrentAmenity(""); // Clear amenity input on open/change
+    }
+  }, [property]);
+
+  // Basic validation for the first step
   const canNextBasic = useMemo(
-    () => form.propertyName && form.description && (form.city || form.location), // <-- FIX: Was form.name
+    // Description is optional, main required fields are name, province, city
+    () => form.propertyName && form.province && form.city,
     [form]
   );
 
@@ -119,13 +111,14 @@ export default function EditPropertyModal({ route, navigation }) {
     if (!res.canceled && res.assets && res.assets.length > 0) {
       const asset = res.assets[0];
       setNewThumb({
+        // Store the selected file object
         uri: asset.uri,
         name:
           asset.fileName ||
           `thumbnail.${asset.mimeType.split("/")[1] || "jpg"}`,
         type: asset.mimeType,
       });
-      setThumbPreview(asset.uri); // Update preview to local URI
+      setThumbPreview(asset.uri); // Update preview to show the local file URI
     }
   }
 
@@ -143,52 +136,88 @@ export default function EditPropertyModal({ route, navigation }) {
           `photo_${i}.${asset.mimeType.split("/")[1] || "jpg"}`,
         type: asset.mimeType,
       }));
-      setNewPhotos(selectedAssets);
-      // Update preview to show new local images (which are objects)
-      setPhotosPreview(
-        selectedAssets.map((a) => ({ url: a.uri, public_id: a.uri }))
-      );
+      setNewPhotos(selectedAssets); // Store the array of selected file objects
+      // Update preview to show new local images (map URIs for display)
+      setPhotosPreview(selectedAssets.map((a) => a.uri)); // Store URIs for preview
     }
   }
 
+  // --- Video URL Function ---
   function addVideo() {
-    const v = (videoUrl || "").trim();
-    if (!v) return;
-    setForm((s) => ({ ...s, videoTours: [...(s.videoTours || []), v] }));
-    setVideoUrl("");
+    const v = videoUrl.trim();
+    if (v && !form.videoTours.includes(v)) {
+      // Prevent duplicates
+      setForm((s) => ({ ...s, videoTours: [...(s.videoTours || []), v] }));
+      setVideoUrl("");
+    } else if (!v) {
+      // notifyError("Video URL cannot be empty.");
+    } else {
+      // notifyError("Video URL already added.");
+      setVideoUrl(""); // Still clear input
+    }
   }
+
+  // --- Amenity Functions ---
+  const handleAddAmenity = useCallback(() => {
+    const trimmedAmenity = currentAmenity.trim();
+    if (trimmedAmenity && !form.amenities.includes(trimmedAmenity)) {
+      setForm((prevForm) => ({
+        ...prevForm,
+        amenities: [...prevForm.amenities, trimmedAmenity],
+      }));
+      setCurrentAmenity("");
+    } else if (!trimmedAmenity) {
+      /* Optional notification */
+    } else {
+      /* Optional notification */ setCurrentAmenity("");
+    }
+  }, [currentAmenity, form.amenities]);
+
+  const handleRemoveAmenity = useCallback((amenityToRemove) => {
+    setForm((prevForm) => ({
+      ...prevForm,
+      amenities: prevForm.amenities.filter(
+        (amenity) => amenity !== amenityToRemove
+      ),
+    }));
+  }, []);
+  // -------------------------
 
   // --- Save Function ---
   async function save() {
+    // Basic validation
+    if (!form.propertyName || !form.province || !form.city) {
+      notifyError(
+        "Please fill in Property Name, Province, and City (*) on the Basic Info tab."
+      );
+      setStep(0);
+      return;
+    }
+
     setSaving(true);
     try {
-      // --- FIX: Send payload matching backend model ---
+      // Payload contains only valid Property fields
       const payload = {
-        ...form,
-        price: Number(form.price || 0),
-        numberOfUnit: Number(form.numberOfUnit || 0), // <-- FIX: Send 'numberOfUnit'
-        // 'status' is already correct
-        specifications: {
-          ...form.specifications,
-          floorArea: Number(form.specifications.floorArea || 0),
-          bedrooms: Number(form.specifications.bedrooms || 0),
-          bathrooms: Number(form.specifications.bathrooms || 0),
-        },
+        propertyName: form.propertyName,
+        description: form.description,
+        street: form.street,
+        location: form.location,
+        city: form.city,
+        province: form.province,
+        amenities: form.amenities, // Send updated amenities
+        videoTours: form.videoTours, // Send updated video tours
+        propertyType: form.propertyType,
       };
-
-      // Clean up fields the backend controller doesn't use or auto-sets
-      delete payload.availableUnits;
-      delete payload.name;
-      delete payload.isSold; // Backend controller handles this based on numberOfUnit
+      // Removed unit-specific fields
 
       await updateProperty(property._id, payload);
 
+      // Upload media ONLY if new files were selected
       if (newThumb) {
         await uploadThumbnail(property._id, newThumb);
       }
       if (newPhotos.length) {
-        // This REPLACES all existing photos per backend controller logic
-        await uploadPhotos(property._id, newPhotos);
+        await uploadPhotos(property._id, newPhotos); // Assumes API replaces photos
       }
 
       notifySuccess("Property updated successfully!");
@@ -209,9 +238,12 @@ export default function EditPropertyModal({ route, navigation }) {
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Edit Property</Text>
+          <Text style={styles.modalTitle}>
+            Edit Property (Building/Complex)
+          </Text>
+          {/* Simplified Stepper */}
           <View style={styles.stepper}>
-            {["Basic", "Media", "Specifications", "More"].map((t, i) => (
+            {["Basic", "Media"].map((t, i) => (
               <Text
                 key={t}
                 style={[styles.stepText, i === step && styles.stepTextActive]}
@@ -225,70 +257,114 @@ export default function EditPropertyModal({ route, navigation }) {
             {/* --- STEP 0: Basic Info --- */}
             {step === 0 && (
               <View style={styles.stepView}>
-                <L label="Title*">
+                <L label="Property Name* (e.g., Building Name)">
                   <T
-                    value={form.propertyName} // <-- FIX: Was form.name
-                    onChangeText={
-                      (v) => setForm((s) => ({ ...s, propertyName: v })) // <-- FIX: Was name: v
+                    value={form.propertyName}
+                    onChangeText={(v) =>
+                      setForm((s) => ({ ...s, propertyName: v }))
                     }
-                    placeholder="Property title"
+                    placeholder="e.g., The Grand Residences"
                   />
                 </L>
-                <L label="Description*">
+                {/* Kept description for building */}
+                <L label="Description (About the building/complex)">
                   <T
                     value={form.description}
                     onChangeText={(v) =>
                       setForm((s) => ({ ...s, description: v }))
                     }
-                    placeholder="Property description"
+                    placeholder="Building amenities, location highlights..."
                     multiline
                   />
                 </L>
-                <L label="Street address">
+                <L label="Property Type* (Overall type)">
+                  <Pressable
+                    onPress={() => setTypePickerOpen(true)}
+                    style={styles.pickerButton}
+                  >
+                    <Text style={{ color: colors.text }}>
+                      {form.propertyType.charAt(0).toUpperCase() +
+                        form.propertyType.slice(1)}
+                    </Text>
+                  </Pressable>
+                </L>
+                <L label="Street Address">
                   <T
                     value={form.street}
                     onChangeText={(v) => setForm((s) => ({ ...s, street: v }))}
-                    placeholder="Street address"
+                    placeholder="e.g., 123 Main St"
                   />
                 </L>
-
-                <L label="Province">
-                  <Pressable
-                    onPress={() => setProvPickerOpen(true)}
-                    style={styles.pickerButton}
-                  >
-                    <Text style={{ color: form.province ? "#000" : "#6B7280" }}>
-                      {form.province || "Select province"}
-                    </Text>
-                  </Pressable>
+                {/* Province Input */}
+                <L label="Province*">
+                  <T
+                    value={form.province}
+                    onChangeText={(v) =>
+                      setForm((s) => ({ ...s, province: v }))
+                    }
+                    placeholder="Enter province name"
+                  />
                 </L>
-
-                <L label="City">
-                  <Pressable
-                    disabled={!form.province || loadingCities}
-                    onPress={() => setCityPickerOpen(true)}
-                    style={[
-                      styles.pickerButton,
-                      (!form.province || loadingCities) &&
-                        styles.pickerButtonDisabled,
-                    ]}
-                  >
-                    <Text style={{ color: form.city ? "#000" : "#6B7280" }}>
-                      {loadingCities
-                        ? "Loading..."
-                        : form.city || "Select city"}
-                    </Text>
-                  </Pressable>
+                {/* City Input */}
+                <L label="City*">
+                  <T
+                    value={form.city}
+                    onChangeText={(v) => setForm((s) => ({ ...s, city: v }))}
+                    placeholder="Enter city name"
+                  />
                 </L>
-
-                <L label="Additional location (optional)">
+                <L label="Additional location details (optional)">
                   <T
                     value={form.location}
                     onChangeText={(v) =>
                       setForm((s) => ({ ...s, location: v }))
                     }
-                    placeholder="Village/Barangay or Notes"
+                    placeholder="Village/Barangay or specific notes"
                   />
+                </L>
+                {/* Amenities Input */}
+                <L label="Building Amenities">
+                  <View style={styles.amenityInputContainer}>
+                    <T
+                      style={styles.amenityInput}
+                      value={currentAmenity}
+                      onChangeText={setCurrentAmenity}
+                      placeholder="Type amenity and press Add"
+                      onSubmitEditing={handleAddAmenity}
+                    />
+                    <Pressable
+                      style={[
+                        styles.addButton,
+                        !currentAmenity.trim() && styles.addButtonDisabled,
+                      ]}
+                      onPress={handleAddAmenity}
+                      disabled={!currentAmenity.trim()}
+                    >
+                      <Text style={styles.addButtonText}>Add</Text>
+                    </Pressable>
+                  </View>
+                  <View style={styles.amenitiesList}>
+                    {form.amenities.map((amenity, index) => (
+                      <View key={index} style={styles.amenityTag}>
+                        <Text style={styles.amenityTagText}>{amenity}</Text>
+                        <Pressable
+                          onPress={() => handleRemoveAmenity(amenity)}
+                          style={styles.removeButton}
+                        >
+                          <Ionicons
+                            name="close-circle"
+                            size={18}
+                            color={colors.danger}
+                          />
+                        </Pressable>
+                      </View>
+                    ))}
+                    {form.amenities.length === 0 && (
+                      <Text style={styles.noAmenitiesText}>
+                        No building amenities added yet.
+                      </Text>
+                    )}
+                  </View>
                 </L>
               </View>
             )}
@@ -297,16 +373,15 @@ export default function EditPropertyModal({ route, navigation }) {
             {step === 1 && (
               <View style={styles.stepView}>
                 <Text style={styles.infoText}>
-                  Recommended: 1280x800, JPG/PNG
+                  Update photos/videos for the overall property.
                 </Text>
-
+                {/* Thumbnail Input */}
                 <L label="Current Thumbnail">
                   <Pressable onPress={pickThumb} style={styles.imagePicker}>
                     {thumbPreview ? (
                       <Image
-                        source={{ uri: toAbsoluteUrl(thumbPreview) }}
+                        source={{ uri: toAbsoluteUrl(thumbPreview) }} // Handles both local URI and remote URL
                         style={styles.previewImage}
-                        // --- FIX: Add this prop for web ---
                         {...(Platform.OS === "web" && {
                           referrerPolicy: "no-referrer",
                         })}
@@ -316,10 +391,10 @@ export default function EditPropertyModal({ route, navigation }) {
                     )}
                   </Pressable>
                   {newThumb && (
-                    <Text style={styles.infoTextSm}>{newThumb.name}</Text>
+                    <Text style={styles.infoTextSm}>New: {newThumb.name}</Text>
                   )}
                 </L>
-
+                {/* Photos Input */}
                 <L label="Current Photos">
                   <Pressable
                     onPress={pickPhotos}
@@ -328,40 +403,29 @@ export default function EditPropertyModal({ route, navigation }) {
                     <Text>Click to select new photos (replaces all)</Text>
                   </Pressable>
                   <ScrollView horizontal style={styles.photosContainer}>
-                    {photosPreview.map((photo) => {
-                      // --- FIX: Handle both string (initial) and object (new) ---
-                      const key =
-                        typeof photo === "string"
-                          ? photo
-                          : photo.public_id || photo.uri;
-                      const url =
-                        typeof photo === "string"
-                          ? photo
-                          : photo.url || photo.uri;
-                      return (
-                        <Image
-                          key={key}
-                          source={{ uri: toAbsoluteUrl(url) }}
-                          style={styles.previewImageSmall}
-                          // --- FIX: Add this prop for web ---
-                          {...(Platform.OS === "web" && {
-                            referrerPolicy: "no-referrer",
-                          })}
-                        />
-                      );
-                    })}
+                    {/* Map over photosPreview which now holds URIs or original URLs */}
+                    {photosPreview.map((photoUrl, index) => (
+                      <Image
+                        key={photoUrl + index} // Use index if URLs aren't unique enough temporarily
+                        source={{ uri: toAbsoluteUrl(photoUrl) }} // Handles both local/remote
+                        style={styles.previewImageSmall}
+                        {...(Platform.OS === "web" && {
+                          referrerPolicy: "no-referrer",
+                        })}
+                      />
+                    ))}
                   </ScrollView>
                   <Text style={styles.infoTextSm}>
-                    {newPhotos.length} new photos selected
+                    {newPhotos.length} new photos selected (will replace
+                    existing on save)
                   </Text>
                 </L>
-
-                {/* Video URLs */}
-                <L label="Video Tour URL (YouTube/Vimeo)">
+                {/* Video URLs Input */}
+                <L label="Video Tour URLs (YouTube/Vimeo)">
                   <T
                     value={videoUrl}
                     onChangeText={setVideoUrl}
-                    placeholder="https://youtube.com/watch?v=..."
+                    placeholder="Add a new video URL..."
                   />
                 </L>
                 <Pressable
@@ -375,141 +439,25 @@ export default function EditPropertyModal({ route, navigation }) {
                 >
                   <Text style={styles.buttonText}>Add Video URL</Text>
                 </Pressable>
-                {!!form.videoTours?.length && (
-                  <Text style={styles.infoTextSm}>
-                    {form.videoTours.length} video link(s) added
-                  </Text>
+                {/* Display current video URLs - Simple list */}
+                {form.videoTours && form.videoTours.length > 0 && (
+                  <View style={{ marginTop: 10 }}>
+                    <Text style={styles.infoTextSm}>Current Video URLs:</Text>
+                    {form.videoTours.map((url, index) => (
+                      <Text
+                        key={index}
+                        style={styles.infoTextSm}
+                        numberOfLines={1}
+                      >
+                        • {url}
+                      </Text>
+                      // TODO: Add a remove button per URL
+                    ))}
+                  </View>
                 )}
               </View>
             )}
-
-            {/* --- STEP 2: Specifications --- */}
-            {step === 2 && (
-              <View style={styles.stepView}>
-                <L label="Price*">
-                  <T
-                    value={form.price}
-                    onChangeText={(v) => setForm((s) => ({ ...s, price: v }))}
-                    placeholder="e.g. 4500000"
-                    keyboardType="numeric"
-                  />
-                </L>
-                <L label="Units*">
-                  <T
-                    value={form.numberOfUnit} // <-- FIX: Was form.availableUnits
-                    onChangeText={
-                      (v) => setForm((s) => ({ ...s, numberOfUnit: v })) // <-- FIX: Was availableUnits: v
-                    }
-                    placeholder="e.g. 3"
-                    keyboardType="numeric"
-                  />
-                </L>
-                <L label="Floor Area*">
-                  <T
-                    value={form.specifications.floorArea}
-                    onChangeText={(v) =>
-                      setForm((s) => ({
-                        ...s,
-                        specifications: { ...s.specifications, floorArea: v },
-                      }))
-                    }
-                    placeholder="e.g. 150"
-                    keyboardType="numeric"
-                  />
-                </L>
-                <View style={{ flexDirection: "row", gap: 10 }}>
-                  <L label="Bedrooms*" style={{ flex: 1 }}>
-                    <T
-                      value={form.specifications.bedrooms}
-                      onChangeText={(v) =>
-                        setForm((s) => ({
-                          ...s,
-                          specifications: { ...s.specifications, bedrooms: v },
-                        }))
-                      }
-                      placeholder="e.g. 3"
-                      keyboardType="numeric"
-                    />
-                  </L>
-                  <L label="Bathrooms*" style={{ flex: 1 }}>
-                    <T
-                      value={form.specifications.bathrooms}
-                      onChangeText={(v) =>
-                        setForm((s) => ({
-                          ...s,
-                          specifications: { ...s.specifications, bathrooms: v },
-                        }))
-                      }
-                      placeholder="e.g. 2"
-                      keyboardType="numeric"
-                    />
-                  </L>
-                </View>
-              </View>
-            )}
-
-            {/* --- STEP 3: More --- */}
-            {step === 3 && (
-              <View style={styles.stepView}>
-                <L label="Property Type">
-                  <Pressable
-                    onPress={() => setTypePickerOpen(true)}
-                    style={styles.pickerButton}
-                  >
-                    <Text style={{ color: colors.text }}>
-                      {form.propertyType}
-                    </Text>
-                  </Pressable>
-                </L>
-                <L label="Additional Info">
-                  <T
-                    value={form.more}
-                    onChangeText={(v) => setForm((s) => ({ ...s, more: v }))}
-                    placeholder="Add more details..."
-                    multiline
-                  />
-                </L>
-                <View style={styles.statusToggle}>
-                  <View>
-                    <Text style={{ fontWeight: "600" }}>
-                      {form.status === "available" ? "Available" : "Sold"}
-                    </Text>
-                    <Text style={styles.infoTextSm}>
-                      Mark as available or sold
-                    </Text>
-                  </View>
-                  <Pressable
-                    onPress={() =>
-                      setForm((s) => ({
-                        ...s,
-                        status: s.status === "available" ? "sold" : "available",
-                      }))
-                    }
-                    style={[
-                      styles.statusButton,
-                      {
-                        backgroundColor:
-                          form.status === "available"
-                            ? colors.successBg
-                            : colors.dangerBg,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={{
-                        color:
-                          form.status === "available"
-                            ? colors.successText
-                            : colors.dangerText,
-                        fontWeight: "700",
-                      }}
-                    >
-                      {form.status === "available" ? "AVAILABLE" : "SOLD"}
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-            )}
+            {/* Steps 2 & 3 Removed */}
           </ScrollView>
 
           {/* --- Navigation --- */}
@@ -520,21 +468,24 @@ export default function EditPropertyModal({ route, navigation }) {
               }
               style={[styles.button, styles.buttonOutline]}
             >
-              <Text style={styles.buttonOutlineText}>Back</Text>
+              <Text style={styles.buttonOutlineText}>
+                {step === 0 ? "Cancel" : "Back"}
+              </Text>
             </Pressable>
-            {step < 3 ? (
+            {/* Show Next if not on last step (step 1) */}
+            {step < 1 ? (
               <Pressable
-                onPress={() =>
-                  step === 0 && !canNextBasic ? null : setStep((s) => s + 1)
-                }
+                onPress={() => setStep((s) => s + 1)}
+                disabled={step === 0 && !canNextBasic}
                 style={[
                   styles.button,
-                  canNextBasic || step > 0 ? {} : styles.buttonDisabled,
+                  step === 0 && !canNextBasic && styles.buttonDisabled,
                 ]}
               >
                 <Text style={styles.buttonText}>Next</Text>
               </Pressable>
             ) : (
+              // Show Save on last step (step 1)
               <Pressable
                 onPress={save}
                 disabled={saving}
@@ -556,35 +507,17 @@ export default function EditPropertyModal({ route, navigation }) {
         visible={typePickerOpen}
         onClose={() => setTypePickerOpen(false)}
         title="Select Property Type"
-        options={PROPERTY_TYPES.map((t) => ({ label: t, value: t }))}
+        options={PROPERTY_TYPES.map((t) => ({
+          label: t.charAt(0).toUpperCase() + t.slice(1),
+          value: t,
+        }))}
         value={form.propertyType}
         onSelect={(v) => {
           setForm((s) => ({ ...s, propertyType: v }));
           setTypePickerOpen(false);
         }}
       />
-      <PickerModal
-        visible={provPickerOpen}
-        onClose={() => setProvPickerOpen(false)}
-        title="Select Province"
-        options={provinces}
-        value={form.province}
-        onSelect={(v) => {
-          setForm((s) => ({ ...s, province: v, city: "" }));
-          setProvPickerOpen(false);
-        }}
-      />
-      <PickerModal
-        visible={cityPickerOpen}
-        onClose={() => setCityPickerOpen(false)}
-        title="Select City"
-        options={cities}
-        value={form.city}
-        onSelect={(v) => {
-          setForm((s) => ({ ...s, city: v }));
-          setCityPickerOpen(false);
-        }}
-      />
+      {/* Removed Province/City Pickers */}
     </Modal>
   );
 }
@@ -632,17 +565,21 @@ const styles = StyleSheet.create({
     fontSize: 18,
     textAlign: "center",
     color: colors.text,
+    marginBottom: 5,
   },
   stepper: {
     flexDirection: "row",
     justifyContent: "center",
     gap: 12,
     marginVertical: 12,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   stepText: { color: colors.muted, fontWeight: "500" },
   stepTextActive: { color: colors.primary, fontWeight: "700" },
   formContainer: { maxHeight: "70%", paddingBottom: 20 },
-  stepView: { gap: 10, paddingHorizontal: 4, paddingBottom: 16 },
+  stepView: { gap: 12, paddingHorizontal: 4, paddingBottom: 16 },
   navigation: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -657,6 +594,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.primary,
     alignItems: "center",
+    minWidth: 100,
   },
   buttonText: { color: "#fff", fontWeight: "600" },
   buttonOutline: {
@@ -667,7 +605,7 @@ const styles = StyleSheet.create({
   buttonOutlineText: { color: colors.text, fontWeight: "600" },
   buttonDisabled: { backgroundColor: colors.gray, opacity: 0.7 },
   buttonSmall: { paddingVertical: 8, paddingHorizontal: 12 },
-  labelContainer: { marginBottom: 6 },
+  labelContainer: { marginBottom: 0 },
   labelText: {
     color: "#6B7280",
     fontSize: 13,
@@ -696,8 +634,8 @@ const styles = StyleSheet.create({
     padding: 10,
     height: 44,
     justifyContent: "center",
+    backgroundColor: "#fff",
   },
-  pickerButtonDisabled: { backgroundColor: colors.light, opacity: 0.7 },
   infoText: { color: colors.muted, fontSize: 13, marginBottom: 4 },
   infoTextSm: { color: colors.muted, fontSize: 12, marginTop: 2 },
   imagePicker: {
@@ -720,14 +658,60 @@ const styles = StyleSheet.create({
     marginRight: 8,
     backgroundColor: colors.light,
   },
-  statusToggle: {
+  // --- Amenity Input Styles ---
+  amenityInputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: colors.light,
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 8,
+    gap: 8,
   },
-  statusButton: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  amenityInput: {
+    flex: 1,
+  },
+  addButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    height: 44,
+    justifyContent: "center",
+  },
+  addButtonDisabled: {
+    backgroundColor: colors.muted,
+    opacity: 0.7,
+  },
+  addButtonText: {
+    color: colors.white,
+    fontWeight: "600",
+  },
+  amenitiesList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 10,
+    gap: 8,
+  },
+  amenityTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.light,
+    borderRadius: 15,
+    paddingVertical: 5,
+    paddingLeft: 10,
+    paddingRight: 5,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  amenityTagText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    marginRight: 4,
+  },
+  removeButton: {
+    padding: 2,
+  },
+  noAmenitiesText: {
+    fontSize: 13,
+    color: colors.muted,
+    fontStyle: "italic",
+  },
+  // -------------------------
 });
