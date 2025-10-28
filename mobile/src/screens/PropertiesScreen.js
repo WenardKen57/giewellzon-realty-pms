@@ -195,9 +195,6 @@ export default function PropertiesScreen() {
         <Text style={styles.cardLocation} numberOfLines={1}>
           {item.city}, {item.province}
         </Text>
-        <Text style={styles.cardPrice}>
-          ₱ {Number(item.price).toLocaleString()}
-        </Text>
         {/* --- FIX: UPDATED PER YOUR REQUEST --- */}
         <Text
           style={[
