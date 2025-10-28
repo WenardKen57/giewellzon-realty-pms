@@ -70,46 +70,45 @@ async function updateUnit(req, res, next) {
   try {
     const { id } = req.params; // This is the Unit ID
     const b = req.body || {};
+    const patch = {}; // Initialize patch object // --- START of ARRAY FIELD HANDLING FIX ---
 
-    // Ensure array fields are handled correctly
-    if (b.videoTours)
-      b.videoTours = ensureArrayStrings(b.videoTours).filter(isYouTubeUrl);
-    // --- 👇 ADDED AMENITIES HANDLING ---
-    if (b.amenities) b.amenities = ensureArrayStrings(b.amenities);
-    // ------------------------------------
+    // Handle array fields explicitly to ensure they can be cleared (set to [])
+    if (b.videoTours !== undefined) {
+      patch.videoTours = ensureArrayStrings(b.videoTours).filter(isYouTubeUrl);
+    }
 
-    // --- 👇 UPDATED allowed array ---
-    const allowed = [
+    if (b.amenities !== undefined) {
+      patch.amenities = ensureArrayStrings(b.amenities);
+    } // IMPORTANT FIX: Allow 'photos' array to be cleared or replaced via update
+
+    // Note: The main photo upload is via uploadUnitPhotos, but this allows clearing the list.
+    if (b.photos !== undefined) {
+      patch.photos = ensureArrayStrings(b.photos);
+    } // --- END of ARRAY FIELD HANDLING FIX --- // Define allowed scalar/object fields to merge with the patch
+    const allowedScalars = [
       "unitNumber",
       "price",
       "status",
       "specifications",
-      "photos", // Note: photos are usually handled by uploadUnitPhotos, but allow update here if needed
-      "videoTours",
-      "soldDate",
-      "description", // Added description
-      "amenities", // Added amenities
+      "description",
     ];
-    // ----------------------------
-    const patch = pick(b, allowed); // Use helper to get only allowed fields
+    // Merge scalar fields into the patch object
+    Object.assign(patch, pick(b, allowedScalars));
 
-    if (patch.price != null) patch.price = Number(patch.price);
+    if (patch.price != null) patch.price = Number(patch.price); // Handle sold/available logic based on status update (Logic is correct)
 
-    // Handle sold/available logic based on status update
     if (patch.status) {
       if (patch.status === "sold" && !patch.soldDate) {
         // Only set soldDate if status becomes 'sold' and no date provided
         // Try to use provided soldDate first, fallback to now
-        patch.soldDate = b.soldDate ? new Date(b.soldDate) : new Date();
-        // Validate parsed date
+        patch.soldDate = b.soldDate ? new Date(b.soldDate) : new Date(); // Validate parsed date
         if (isNaN(patch.soldDate.getTime())) {
           console.warn(
             `Invalid soldDate received for unit ${id}: ${b.soldDate}. Defaulting to now.`
           );
           patch.soldDate = new Date();
         }
-      }
-      // Clear soldDate if status changes away from 'sold'
+      } // Clear soldDate if status changes away from 'sold'
       if (patch.status === "available" || patch.status === "rented") {
         patch.soldDate = null;
       }
@@ -125,8 +124,7 @@ async function updateUnit(req, res, next) {
         } else {
           console.warn(
             `Invalid soldDate received during update for unit ${id}: ${b.soldDate}. Ignoring.`
-          );
-          // Do not include invalid date in the patch
+          ); // Do not include invalid date in the patch
         }
       }
     }
