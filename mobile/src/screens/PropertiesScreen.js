@@ -67,8 +67,8 @@ export default function PropertiesScreen() {
         },
         {}
       );
-      const data = await listProperties(activeFilters);
-      setProperties(data);
+      const response = await listProperties(activeFilters);
+      setProperties(response.data || []);
     } catch (error) {
       notifyError("Failed to load properties.");
       console.error("Load Properties Error:", error.response?.data || error);
