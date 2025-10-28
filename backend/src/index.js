@@ -22,6 +22,7 @@ console.log(
 const app = express();
 
 app.use(helmet());
+/* FOR DEPLOYMENT
 app.use(
   cors({
     origin: [
@@ -32,6 +33,8 @@ app.use(
     credentials: true,
   })
 );
+*/
+app.use(cors());
 
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
