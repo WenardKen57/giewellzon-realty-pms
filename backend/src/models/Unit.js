@@ -26,6 +26,9 @@ const UnitSchema = new mongoose.Schema(
     // Unit-specific media
     photos: { type: [String], default: [] },
     videoTours: { type: [String], default: [] },
+    // --- 👇 ADD THESE FIELDS ---
+    description: { type: String, trim: true }, // Description specific to this unit
+    amenities: { type: [String], default: [] }, // Amenities inside this unit (e.g., Balcony, Fireplace)
 
     // You could also move agent assignment here if agents are per-unit
     // assignedAgentName: { type: String },

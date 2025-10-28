@@ -31,6 +31,8 @@ export default function AddUnitModal({ route, navigation }) {
     price: "",
     status: "available",
     specifications: { floorArea: "", bedrooms: "", bathrooms: "" },
+    description: "", // Add description state
+    amenities: [], // Add amenities state
     // Add photos/videos later if needed, starting simple
   });
 
@@ -105,6 +107,29 @@ export default function AddUnitModal({ route, navigation }) {
                     ?.label || "Select Status"}
                 </Text>
               </Pressable>
+            </L>
+            <L label="Unit Description">
+              <T
+                value={form.description}
+                onChangeText={(v) => setForm((s) => ({ ...s, description: v }))}
+                placeholder="Describe this specific unit..."
+                multiline
+              />
+            </L>
+            <L label="Unit Amenities (comma-separated)">
+              <T
+                value={form.amenities.join(", ")}
+                onChangeText={(v) =>
+                  setForm((s) => ({
+                    ...s,
+                    amenities: v
+                      .split(",")
+                      .map((a) => a.trim())
+                      .filter(Boolean),
+                  }))
+                }
+                placeholder="e.g., Balcony, Air Conditioning, Ensuite Bathroom"
+              />
             </L>
             <L label="Floor Area (sqm)">
               <T

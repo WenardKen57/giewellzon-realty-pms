@@ -158,6 +158,12 @@ export default function UnitDetailsScreen() {
         >
           {unit.status.charAt(0).toUpperCase() + unit.status.slice(1)}
         </Text>
+        {unit.description && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Description</Text>
+            <Text style={styles.descriptionText}>{unit.description}</Text>
+          </View>
+        )}
 
         {/* --- Unit Specifications --- */}
         {unit.specifications && Object.keys(unit.specifications).length > 0 && (
@@ -200,6 +206,19 @@ export default function UnitDetailsScreen() {
                   value={unit.specifications.parking}
                 />
               )}
+            </View>
+          </View>
+        )}
+
+        {unit.amenities && unit.amenities.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Unit Amenities</Text>
+            <View style={styles.amenitiesContainer}>
+              {unit.amenities.map((amenity, index) => (
+                <Text key={index} style={styles.amenityItem}>
+                  • {amenity}
+                </Text>
+              ))}
             </View>
           </View>
         )}

@@ -36,6 +36,8 @@ export default function EditUnitModal({ route, navigation }) {
       bedrooms: String(unit?.specifications?.bedrooms || 0),
       bathrooms: String(unit?.specifications?.bathrooms || 0),
     },
+    description: unit?.description || "", // Initialize description
+    amenities: unit?.amenities || [], // Initialize amenities
   });
 
   // Ensure form updates if the unit prop changes (though unlikely in modal context)
@@ -50,6 +52,8 @@ export default function EditUnitModal({ route, navigation }) {
           bedrooms: String(unit.specifications?.bedrooms || 0),
           bathrooms: String(unit.specifications?.bathrooms || 0),
         },
+        description: unit.description || "", // Update on unit change
+        amenities: unit.amenities || [], // Update on unit change
       });
     }
   }, [unit]);
@@ -125,6 +129,29 @@ export default function EditUnitModal({ route, navigation }) {
                     ?.label || "Select Status"}
                 </Text>
               </Pressable>
+            </L>
+            <L label="Unit Description">
+              <T
+                value={form.description}
+                onChangeText={(v) => setForm((s) => ({ ...s, description: v }))}
+                placeholder="Describe this specific unit..."
+                multiline
+              />
+            </L>
+            <L label="Unit Amenities (comma-separated)">
+              <T
+                value={form.amenities.join(", ")}
+                onChangeText={(v) =>
+                  setForm((s) => ({
+                    ...s,
+                    amenities: v
+                      .split(",")
+                      .map((a) => a.trim())
+                      .filter(Boolean),
+                  }))
+                }
+                placeholder="e.g., Balcony, Air Conditioning"
+              />
             </L>
             <L label="Floor Area (sqm)">
               <T
