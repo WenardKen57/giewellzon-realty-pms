@@ -1,5 +1,6 @@
 import AddUnitModal from "../screens/modals/AddUnitModal"; // <-- Add Import
 import EditUnitModal from "../screens/modals/EditUnitModal"; // <-- Add Import
+import UnitDetailsScreen from "../screens/UnitDetailsScreen";
 import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -131,6 +132,11 @@ export default function RootNavigator() {
             <Stack.Screen
               name="PropertyDetails"
               component={PropertyDetailsScreen}
+              options={{ animation: "slide_from_right" }}
+            />
+            <Stack.Screen
+              name="UnitDetailsScreen"
+              component={UnitDetailsScreen}
               options={{ animation: "slide_from_right" }}
             />
             {/* --- MODAL GROUP --- */}

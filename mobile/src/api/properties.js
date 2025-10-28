@@ -100,6 +100,18 @@ export async function deleteUnit(unitId) {
     throw error;
   }
 }
+// Note: Backend endpoint is GET /api/units/:id
+export async function getUnit(unitId) {
+  if (!unitId) throw new Error("Unit ID is required");
+  try {
+    const endpoint = `units/${unitId}`; // Endpoint is relative to /api/units
+    const { data } = await api.get(endpoint);
+    return data; // Returns the full unit document, likely populated with property info
+  } catch (error) {
+    console.error(`Error fetching unit ${unitId}:`, error);
+    throw error;
+  }
+}
 
 export async function uploadUnitPhotos(unitId, files) {
   if (!unitId) throw new Error("Unit ID is required for photo upload");

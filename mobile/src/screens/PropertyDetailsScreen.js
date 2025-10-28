@@ -64,23 +64,23 @@ export default function PropertyDetailsScreen() {
   // --- Actions ---
 
   const handleToggleFeatured = async () => {
-    if (!property) return;
+    // --- Add try block ---
     try {
+      if (!property) return; // Keep the guard clause inside try
+
       // Call the API to toggle the status
       const updated = await toggleFeatured(property._id, property.featured);
 
-      // --- FIX: Reload the full property data AFTER the toggle succeeds ---
+      // Reload the full property data AFTER the toggle succeeds
       await loadProperty();
-      // --- End of FIX ---
 
       notifySuccess(
-        `Property ${updated.featured ? "featured" : "unfeatured"}.` // Use 'updated' here just for the notification message
+        `Property ${updated.featured ? "featured" : "unfeatured"}.`
       );
-      // NOTE: We no longer call setProperty(updated) directly,
-      // because loadProperty() handles setting the complete state.
+      // --- Add catch block ---
     } catch (error) {
       notifyError("Failed to update featured status.");
-      console.error("Toggle Feature Error:", error); // Added log
+      console.error("Toggle Feature Error:", error);
     }
   };
 
@@ -333,59 +333,73 @@ export default function PropertyDetailsScreen() {
               <Text style={styles.addButtonText}>Add Unit</Text>
             </Pressable>
           </View>
-
-          {property.units && property.units.length > 0 ? (
-            property.units.map((unit) => (
-              <View key={unit._id} style={styles.unitCard}>
-                <View style={styles.unitInfo}>
-                  <Text style={styles.unitNumber}>{unit.unitNumber}</Text>
-                  <Text style={styles.unitPrice}>
-                    ₱ {Number(unit.price).toLocaleString()}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.unitStatus,
-                      { color: getStatusColor(unit.status) },
-                    ]}
-                  >
-                    {unit.status.charAt(0).toUpperCase() + unit.status.slice(1)}
-                  </Text>
-                  <Text style={styles.unitSpecs}>
-                    {unit.specifications?.bedrooms
-                      ? `${unit.specifications.bedrooms} Bed`
-                      : ""}
-                    {unit.specifications?.bathrooms
-                      ? ` • ${unit.specifications.bathrooms} Bath`
-                      : ""}
-                    {unit.specifications?.floorArea
-                      ? ` • ${unit.specifications.floorArea} sqm`
-                      : ""}
-                  </Text>
-                </View>
-                <View style={styles.unitActions}>
-                  <Pressable
-                    style={styles.unitActionButton}
-                    onPress={() =>
-                      navigation.navigate("EditUnitModal", { unit })
-                    } // Pass the unit object
-                  >
-                    <Ionicons name="pencil" size={20} color={colors.primary} />
-                  </Pressable>
-                  <Pressable
-                    style={styles.unitActionButton}
-                    onPress={() => handleDeleteUnit(unit._id)}
-                  >
-                    <Ionicons name="trash" size={20} color={colors.danger} />
-                  </Pressable>
-                </View>
-              </View>
-            ))
-          ) : (
-            <Text style={styles.emptyText}>
-              No units added for this property yet.
-            </Text>
-          )}
         </View>
+
+        {/* --- FIX: Moved the .map() call inside the condition --- */}
+        {property.units && property.units.length > 0 ? (
+          // If units exist, map over them HERE
+          property.units.map((unit) => (
+            <Pressable // <-- Add Pressable wrapper if not already there
+              key={unit._id}
+              style={styles.unitCard}
+              onPress={() =>
+                navigation.navigate("UnitDetailsScreen", { unitId: unit._id })
+              }
+            >
+              <View style={styles.unitInfo}>
+                <Text style={styles.unitNumber}>{unit.unitNumber}</Text>
+                <Text style={styles.unitPrice}>
+                  ₱ {Number(unit.price).toLocaleString()}
+                </Text>
+                <Text
+                  style={[
+                    styles.unitStatus,
+                    { color: getStatusColor(unit.status) },
+                  ]}
+                >
+                  {unit.status.charAt(0).toUpperCase() + unit.status.slice(1)}
+                </Text>
+                <Text style={styles.unitSpecs}>
+                  {unit.specifications?.bedrooms
+                    ? `${unit.specifications.bedrooms} Bed`
+                    : ""}
+                  {unit.specifications?.bathrooms
+                    ? ` • ${unit.specifications.bathrooms} Bath`
+                    : ""}
+                  {unit.specifications?.floorArea
+                    ? ` • ${unit.specifications.floorArea} sqm`
+                    : ""}
+                </Text>
+              </View>
+              <View style={styles.unitActions}>
+                <Pressable
+                  style={styles.unitActionButton}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    navigation.navigate("EditUnitModal", { unit });
+                  }}
+                >
+                  <Ionicons name="pencil" size={20} color={colors.primary} />
+                </Pressable>
+                <Pressable
+                  style={styles.unitActionButton}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleDeleteUnit(unit._id);
+                  }}
+                >
+                  <Ionicons name="trash" size={20} color={colors.danger} />
+                </Pressable>
+              </View>
+            </Pressable> // <-- Close Pressable wrapper
+          )) // <-- End of .map() call
+        ) : (
+          // If no units, display the empty text HERE
+          <Text style={styles.emptyText}>
+            No units added for this property yet.
+          </Text>
+        )}
+        {/* --- END OF FIX --- */}
       </View>
     </ScrollView>
   );
