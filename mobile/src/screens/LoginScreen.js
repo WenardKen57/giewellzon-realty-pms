@@ -15,14 +15,25 @@ export default function LoginScreen() {
   const [emailOrUsername, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(""); // <-- 1. Add error state
 
   async function onSubmit() {
     if (!emailOrUsername || !password) return;
     setLoading(true);
+    setError(""); // <-- 2. Clear previous error on new submit
     try {
       await login(emailOrUsername, password);
     } catch (e) {
-      console.error("Login failed:", e?.response?.data?.message || e.message);
+      // 3. Set a user-friendly error message
+      const message = e?.response?.data?.message || e.message;
+      if (message === "Network Error") {
+        setError("Network error. Please check your connection.");
+      } else if (message) {
+        setError(message); // Displays "Invalid credentials", "Email not verified", etc.
+      } else {
+        setError("An unknown error occurred. Please try again.");
+      }
+      console.error("Login failed:", message); // Keep the console log
     } finally {
       setLoading(false);
     }
@@ -116,6 +127,21 @@ export default function LoginScreen() {
               marginTop: 6,
             }}
           />
+
+          {/* 4. Add the error message display */}
+          {error ? (
+            <Text
+              style={{
+                color: colors.danger || "#D9534F", // Use theme color or fallback red
+                textAlign: "center",
+                marginTop: 12,
+                fontSize: 14,
+                fontWeight: "600",
+              }}
+            >
+              {error}
+            </Text>
+          ) : null}
 
           <Pressable
             onPress={onSubmit}
