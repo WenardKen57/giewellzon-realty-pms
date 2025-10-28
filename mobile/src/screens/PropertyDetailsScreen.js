@@ -66,13 +66,21 @@ export default function PropertyDetailsScreen() {
   const handleToggleFeatured = async () => {
     if (!property) return;
     try {
+      // Call the API to toggle the status
       const updated = await toggleFeatured(property._id, property.featured);
-      setProperty(updated); // Update local state for the property
+
+      // --- FIX: Reload the full property data AFTER the toggle succeeds ---
+      await loadProperty();
+      // --- End of FIX ---
+
       notifySuccess(
-        `Property ${updated.featured ? "featured" : "unfeatured"}.`
+        `Property ${updated.featured ? "featured" : "unfeatured"}.` // Use 'updated' here just for the notification message
       );
+      // NOTE: We no longer call setProperty(updated) directly,
+      // because loadProperty() handles setting the complete state.
     } catch (error) {
       notifyError("Failed to update featured status.");
+      console.error("Toggle Feature Error:", error); // Added log
     }
   };
 
