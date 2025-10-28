@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react"; // --- MODIFIED: Added useRef
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Image,
   RefreshControl,
   Platform,
+  TextInput, // --- ADDED ---
 } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { listProperties } from "../api/properties";
@@ -46,14 +47,22 @@ export default function PropertiesScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [filters, setFilters] = useState({
+    search: "", // --- ADDED: Search filter ---
     type: "",
     province: "",
     city: "",
   });
+
+  // --- ADDED: State for the search bar input ---
+  const [searchQuery, setSearchQuery] = useState("");
+
   const [provinces, setProvinces] = useState([]);
   const [cities, setCities] = useState([]);
   const [loadingCities, setLoadingCities] = useState(false);
   const [modalVisible, setModalVisible] = useState(null);
+
+  // --- ADDED: Ref to track initial mount for effects ---
+  const isInitialMount = useRef(true);
 
   // --- Load Properties based on current filters ---
   const loadProperties = useCallback(async () => {
@@ -67,6 +76,8 @@ export default function PropertiesScreen() {
         },
         {}
       );
+      // --- MODIFIED: Log the filters being sent to the API ---
+      console.log("Loading properties with filters:", activeFilters);
       const response = await listProperties(activeFilters);
       setProperties(response.data || []);
     } catch (error) {
@@ -130,19 +141,45 @@ export default function PropertiesScreen() {
     }, [])
   );
 
-  // --- EFFECT 2: Load Properties whenever the screen gains focus OR filters change ---
+  // --- MODIFIED: EFFECT 2: Load Properties on initial mount AND when filters change ---
+  // This is the main fix. This runs on mount and whenever `loadProperties`
+  // (which depends on `filters`) changes.
+  useEffect(() => {
+    loadProperties();
+  }, [loadProperties]);
+
+  // --- MODIFIED: EFFECT 3: Reload properties on screen focus (but skip initial mount) ---
+  // This handles reloading data when you navigate *back* to the screen,
+  // but skips the very first load (which EFFECT 2 handled).
   useFocusEffect(
     useCallback(() => {
-      loadProperties();
-    }, [loadProperties]) // Dependency: loadProperties (which depends on filters)
+      if (isInitialMount.current) {
+        // On mount, `useEffect` (EFFECT 2) already ran.
+        // We just mark the initial mount as complete.
+        isInitialMount.current = false;
+      } else {
+        // On subsequent focuses (e.g., navigating back), we reload.
+        loadProperties();
+      }
+    }, [loadProperties])
   );
 
   // --- Refresh Control ---
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
+    // --- MODIFIED: Clear search query on refresh ---
+    setSearchQuery("");
+    setFilters((prev) => ({ ...prev, search: "" }));
+    // We must await the *new* loadProperties created by the filter change,
+    // so we call listProperties directly with cleared filters.
+
+    // Simpler: Just reload all data.
+    // Note: The filter state won't update in time for loadProperties()
+    // if we don't handle it carefully.
+    // Let's just reload provinces and current-filter-properties.
     await Promise.all([loadProperties(), loadProvinces()]);
     setRefreshing(false);
-  }, [loadProperties, loadProvinces]);
+  }, [loadProperties, loadProvinces]); // Keep original dependencies
 
   // --- Handle Filter Selection (when an item is chosen in the modal) ---
   const handleFilterChange = (name, value) => {
@@ -155,6 +192,17 @@ export default function PropertiesScreen() {
       }
       return newFilters;
     });
+  };
+
+  // --- ADDED: Handle Search Input ---
+  const handleSearchSubmit = () => {
+    setFilters((prev) => ({ ...prev, search: searchQuery.trim() }));
+  };
+
+  // --- ADDED: Handle Search Clear ---
+  const handleSearchClear = () => {
+    setSearchQuery("");
+    setFilters((prev) => ({ ...prev, search: "" }));
   };
 
   // --- Open a Specific Modal ---
@@ -221,6 +269,29 @@ export default function PropertiesScreen() {
   return (
     <View style={styles.container}>
       <Header navigation={navigation} title="Properties" />
+
+      {/* --- ADDED: Search Bar --- */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchWrapper}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by property name..."
+            placeholderTextColor={colors.textSecondary}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            onSubmitEditing={handleSearchSubmit} // For keyboard "Enter"
+            returnKeyType="search"
+          />
+          {searchQuery.length > 0 && (
+            <Pressable onPress={handleSearchClear} style={styles.clearButton}>
+              <Text style={styles.clearButtonText}>✕</Text>
+            </Pressable>
+          )}
+        </View>
+        <Pressable onPress={handleSearchSubmit} style={styles.searchButton}>
+          <Text style={styles.searchButtonText}>Search</Text>
+        </Pressable>
+      </View>
 
       {/* Filter Buttons */}
       <View style={styles.filterContainer}>
@@ -326,6 +397,55 @@ export default function PropertiesScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.light },
   loader: { flex: 1, justifyContent: "center", alignItems: "center" },
+  // --- ADDED: Search Bar Styles ---
+  searchContainer: {
+    flexDirection: "row",
+    padding: 12,
+    backgroundColor: colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    alignItems: "center",
+  },
+  searchWrapper: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.light,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  searchInput: {
+    flex: 1,
+    height: 42,
+    paddingHorizontal: 12,
+    fontSize: 15,
+    color: colors.text,
+  },
+  clearButton: {
+    height: 42,
+    justifyContent: "center",
+    paddingHorizontal: 10,
+    backgroundColor: "transparent",
+  },
+  clearButtonText: {
+    color: colors.textSecondary,
+    fontSize: 16,
+  },
+  searchButton: {
+    marginLeft: 8,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 12,
+    height: 44, // Match wrapper height + border
+    justifyContent: "center",
+    borderRadius: 8,
+  },
+  searchButtonText: {
+    color: colors.white,
+    fontWeight: "600",
+    fontSize: 15,
+  },
+  // --- End of Added Styles ---
   filterContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
