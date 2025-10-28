@@ -160,9 +160,6 @@ export default function OverviewScreen() {
                       <Text style={styles.cardLocation} numberOfLines={1}>
                         {item.city}, {item.province}
                       </Text>
-                      <Text style={styles.cardPrice}>
-                        ₱ {Number(item.price).toLocaleString()}
-                      </Text>
                     </View>
                   </Pressable>
                 ))
