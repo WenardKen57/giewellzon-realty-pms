@@ -1,6 +1,7 @@
 import AddUnitModal from "../screens/modals/AddUnitModal"; // <-- Add Import
 import EditUnitModal from "../screens/modals/EditUnitModal"; // <-- Add Import
 import UnitDetailsScreen from "../screens/UnitDetailsScreen";
+import PhotoViewerScreen from "../screens/PhotoViewerScreen";
 import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -138,6 +139,17 @@ export default function RootNavigator() {
               name="UnitDetailsScreen"
               component={UnitDetailsScreen}
               options={{ animation: "slide_from_right" }}
+            />
+            <Stack.Screen
+              name="PhotoViewerScreen"
+              // You MUST import and provide the component here
+              // e.g., component={PhotoViewerScreen}
+              // If you're using my conceptual PhotoViewerScreen.js
+              component={PhotoViewerScreen}
+              options={{
+                headerShown: false,
+                presentation: "fullScreenModal", // Use fullScreenModal for a cleaner look
+              }}
             />
             {/* --- MODAL GROUP --- */}
             <Stack.Group screenOptions={{ presentation: "modal" }}>

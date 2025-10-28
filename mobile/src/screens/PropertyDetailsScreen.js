@@ -299,18 +299,29 @@ export default function PropertyDetailsScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Building Photo Gallery</Text>
             <FlatList
-              data={property.photos}
+              data={property.photos.map((url) => toAbsoluteUrl(url))} // Pre-process URLs for easier use
               horizontal
               showsHorizontalScrollIndicator={false}
               keyExtractor={(item) => item}
-              renderItem={({ item }) => (
-                <Image
-                  source={{ uri: toAbsoluteUrl(item) }}
-                  style={[styles.galleryImage, { width: width / 2.5 }]}
-                  {...(Platform.OS === "web" && {
-                    referrerPolicy: "no-referrer",
-                  })}
-                />
+              renderItem={({ item, index }) => (
+                <Pressable
+                  // NEW: Add onPress handler to navigate to the viewer screen
+                  onPress={() =>
+                    navigation.navigate("PhotoViewerScreen", {
+                      photos: property.photos.map((url) => toAbsoluteUrl(url)), // Pass all full URLs
+                      initialIndex: index, // Pass the index of the clicked photo
+                      property: property.propertyName, // Optional: for the screen title
+                    })
+                  }
+                >
+                  <Image
+                    source={{ uri: item }}
+                    style={[styles.galleryImage, { width: width / 2.5 }]}
+                    {...(Platform.OS === "web" && {
+                      referrerPolicy: "no-referrer",
+                    })}
+                  />
+                </Pressable>
               )}
               contentContainerStyle={{ paddingVertical: 8 }}
             />
