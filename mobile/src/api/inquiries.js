@@ -1,39 +1,33 @@
 import { api } from "./client";
 import { endpoints } from "./endpoints";
 
-export const listInquiries = async (
-  status,
-  dateFrom = "",
-  dateTo = "",
-  limit = 100 // Default limit for general use
-) => {
-  const params = {
-    limit: limit, // Use the passed limit
-    page: 1,
-    sortBy: "createdAt", // Sort by creation date
-    sortOrder: "desc", // Show newest first
+export const listInquiries = async (params = {}) => {
+  // Set defaults for sorting if not provided
+  const queryParams = {
+    sortBy: "createdAt",
+    sortOrder: "desc",
+    ...params, // Spread the incoming params (page, limit, status, etc.)
   };
 
-  // Add filters only if they have values
-  if (status && status !== "all") {
-    params.status = status;
-  }
-  if (dateFrom) {
-    params.dateFrom = dateFrom;
-  }
-  if (dateTo) {
-    params.dateTo = dateTo;
+  // Remove 'all' status if present, as backend expects no status for 'all'
+  if (queryParams.status === "all") {
+    delete queryParams.status;
   }
 
   try {
-    const response = await api.get(endpoints.inquiries.root, { params });
-    // Backend returns { data: [], total, page, limit }
-    return response.data.data || []; // Return just the array of inquiries
+    const response = await api.get(endpoints.inquiries.root, {
+      params: queryParams, // Pass the whole object to axios
+    });
+
+    // --- MODIFIED ---
+    // Return the full response object { data, total, page, limit }
+    // The screen component is now built to handle this for pagination.
+    return response.data;
   } catch (error) {
     console.error("Error fetching inquiries:", error); // Log the full error
     // Log request config if available
     if (error.config) {
-        console.error("Request config:", error.config);
+      console.error("Request config:", error.config);
     }
     throw error;
   }

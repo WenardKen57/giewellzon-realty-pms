@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react"; // --- MODIFIED: Added useRef, useEffect
 import {
   View,
   Text,
@@ -16,8 +16,9 @@ import PickerModal from "../components/PickerModal";
 import { colors } from "../theme/colors";
 import { notifySuccess, notifyError } from "../utils/notify";
 
-// Statuses from backend model
+// --- MODIFIED: Added "New" to match backend model ---
 const STATUS_OPTIONS = [
+  { label: "New", value: "new" },
   { label: "Pending", value: "pending" },
   { label: "Viewed", value: "viewed" },
   { label: "Contacted", value: "contacted" },
@@ -35,8 +36,10 @@ const DATE_FILTER_OPTIONS = [
   { label: "This Year", value: "year" },
 ];
 
+// --- MODIFIED: Added "New" ---
 const TABS = [
   { label: "All", value: "all" },
+  { label: "New", value: "new" },
   { label: "Pending", value: "pending" },
   { label: "Viewed", value: "viewed" },
   { label: "Contacted", value: "contacted" },
@@ -45,6 +48,7 @@ const TABS = [
 
 const getStatusColor = (status) => {
   switch (status) {
+    case "new": // --- ADDED ---
     case "pending":
       return colors.warning;
     case "viewed":
@@ -78,9 +82,7 @@ const getDatesFromFilter = (filter) => {
       now.getDate()
     ).toISOString();
   } else if (filter === "week") {
-    const firstDayOfWeek = new Date(
-      now.setDate(now.getDate() - now.getDay())
-    );
+    const firstDayOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
     dateFrom = new Date(
       firstDayOfWeek.getFullYear(),
       firstDayOfWeek.getMonth(),
@@ -94,6 +96,9 @@ const getDatesFromFilter = (filter) => {
   return { dateFrom, dateTo };
 };
 
+// --- ADDED: Constant for pagination ---
+const PAGE_LIMIT = 20;
+
 export default function InquiriesScreen({ navigation }) {
   const [inquiries, setInquiries] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -104,31 +109,113 @@ export default function InquiriesScreen({ navigation }) {
   const [isStatusModalVisible, setStatusModalVisible] = useState(false);
   const [selectedInquiry, setSelectedInquiry] = useState(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { dateFrom, dateTo } = getDatesFromFilter(dateFilter);
-      const data = await listInquiries(activeTab, dateFrom, dateTo);
-      setInquiries(data);
-    } catch (error) {
-      notifyError("Failed to load inquiries.");
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  }, [activeTab, dateFilter]);
+  // --- ADDED: State for pagination ---
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const isInitialMount = useRef(true);
 
+  // --- MODIFIED: Updated 'load' to handle pagination and correct API params ---
+  const load = useCallback(
+    async (isRefreshing = false) => {
+      if (!isRefreshing) setLoading(true);
+      // Reset pagination on a new filter or refresh
+      setPage(1);
+      setInquiries([]);
+
+      try {
+        const { dateFrom, dateTo } = getDatesFromFilter(dateFilter);
+
+        // Build params object to match backend req.query
+        const params = {
+          page: 1,
+          limit: PAGE_LIMIT,
+          dateFrom,
+          dateTo,
+        };
+        if (activeTab !== "all") {
+          params.status = activeTab;
+        }
+
+        // API call now returns { data, total, page, limit }
+        const response = await listInquiries(params);
+        setInquiries(response.data || []);
+        setTotal(response.total || 0);
+        setPage(response.page || 1);
+      } catch (error) {
+        notifyError("Failed to load inquiries.");
+        console.error(error);
+      } finally {
+        if (!isRefreshing) setLoading(false);
+      }
+    },
+    [activeTab, dateFilter]
+  ); // Dependencies are correct
+
+  // --- ADDED: useEffect to react to filter changes ---
+  useEffect(() => {
+    load();
+  }, [load]); // 'load' depends on [activeTab, dateFilter]
+
+  // --- MODIFIED: useFocusEffect to only reload on *subsequent* focuses ---
   useFocusEffect(
     useCallback(() => {
-      load();
+      if (isInitialMount.current) {
+        isInitialMount.current = false;
+      } else {
+        // Only reload if navigating *back* to the screen
+        load();
+      }
     }, [load])
   );
 
+  // --- MODIFIED: onRefresh calls load with a flag ---
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
+    await load(true); // Pass true to avoid double loader
     setRefreshing(false);
   }, [load]);
+
+  // --- ADDED: Function to load more inquiries on scroll ---
+  const loadMore = useCallback(async () => {
+    // Don't load more if already loading or if we've reached the end
+    if (loading || loadingMore || inquiries.length >= total) return;
+
+    setLoadingMore(true);
+    try {
+      const { dateFrom, dateTo } = getDatesFromFilter(dateFilter);
+      const nextPage = page + 1;
+
+      const params = {
+        page: nextPage,
+        limit: PAGE_LIMIT,
+        dateFrom,
+        dateTo,
+      };
+      if (activeTab !== "all") {
+        params.status = activeTab;
+      }
+
+      const response = await listInquiries(params);
+      // Append new data to the existing list
+      setInquiries((prev) => [...prev, ...(response.data || [])]);
+      setTotal(response.total || 0);
+      setPage(response.page || nextPage);
+    } catch (error) {
+      notifyError("Failed to load more inquiries.");
+      console.error(error);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [
+    activeTab,
+    dateFilter,
+    loading,
+    loadingMore,
+    page,
+    total,
+    inquiries.length,
+  ]);
 
   const handleTabPress = (tab) => {
     setActiveTab(tab);
@@ -148,6 +235,7 @@ export default function InquiriesScreen({ navigation }) {
     if (!selectedInquiry || !newStatus) return;
 
     try {
+      // Backend expects { status: "new-status" } in the body
       await updateStatus(selectedInquiry._id, newStatus);
       notifySuccess("Inquiry status updated successfully!");
       setStatusModalVisible(false);
@@ -159,29 +247,32 @@ export default function InquiriesScreen({ navigation }) {
     }
   };
 
+  // --- MODIFIED: renderItem to use correct fields from backend model ---
   const renderItem = ({ item }) => (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <Text style={styles.cardTitle}>{item.fullName}</Text>
+        <Text style={styles.cardTitle}>
+          {item.firstName || ""} {item.lastName || ""}
+        </Text>
         <Text style={styles.cardDate}>
           {new Date(item.createdAt).toLocaleDateString()}
         </Text>
       </View>
       <View style={styles.infoRow}>
         <Text style={styles.infoLabel}>Email: </Text>
-        <Text style={styles.infoValue}>{item.email}</Text>
+        <Text style={styles.infoValue}>{item.customerEmail}</Text>
       </View>
-      {item.contactNumber && (
+      {item.customerPhone && (
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Phone: </Text>
-          <Text style={styles.infoValue}>{item.contactNumber}</Text>
+          <Text style={styles.infoValue}>{item.customerPhone}</Text>
         </View>
       )}
-      {item.property && (
+      {item.propertyName && (
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Property: </Text>
           <Text style={styles.infoValue} numberOfLines={1}>
-            {item.property.name}
+            {item.propertyName}
           </Text>
         </View>
       )}
@@ -216,10 +307,7 @@ export default function InquiriesScreen({ navigation }) {
           {TABS.map((tab) => (
             <Pressable
               key={tab.value}
-              style={[
-                styles.tab,
-                activeTab === tab.value && styles.activeTab,
-              ]}
+              style={[styles.tab, activeTab === tab.value && styles.activeTab]}
               onPress={() => handleTabPress(tab.value)}
             >
               <Text
@@ -242,15 +330,12 @@ export default function InquiriesScreen({ navigation }) {
       >
         <Text style={styles.dateFilterText}>
           Filter:{" "}
-          {
-            DATE_FILTER_OPTIONS.find((opt) => opt.value === dateFilter)
-              ?.label
-          }
+          {DATE_FILTER_OPTIONS.find((opt) => opt.value === dateFilter)?.label}
         </Text>
         <Text style={styles.dateFilterIcon}>▼</Text>
       </Pressable>
 
-      {loading && !refreshing ? (
+      {loading && !refreshing && !loadingMore ? ( // --- MODIFIED: Don't show full loader when loading more
         <ActivityIndicator
           size="large"
           color={colors.primary}
@@ -267,6 +352,17 @@ export default function InquiriesScreen({ navigation }) {
           }
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          // --- ADDED: Pagination props ---
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            loadingMore ? (
+              <ActivityIndicator
+                style={{ margin: 20 }}
+                color={colors.primary}
+              />
+            ) : null
           }
         />
       )}
