@@ -21,7 +21,10 @@ export default function ProfileScreen() {
   const { user: authUser, logout, refreshUserProfile } = useAuth(); // Get auth user and logout
   const [user, setUser] = useState(authUser); // Initialize with auth user
   const [loading, setLoading] = useState(false);
+
+  // --- UPDATED STATE: Added username ---
   const [form, setForm] = useState({
+    username: authUser?.username || "",
     fullName: authUser?.fullName || "",
     contactNumber: authUser?.contactNumber || "",
   });
@@ -35,7 +38,9 @@ export default function ProfileScreen() {
     try {
       const userData = await getMe();
       setUser(userData);
+      // --- UPDATED: Load username into form ---
       setForm({
+        username: userData.username || "",
         fullName: userData.fullName || "",
         contactNumber: userData.contactNumber || "",
       });
@@ -55,8 +60,16 @@ export default function ProfileScreen() {
   );
 
   const handleUpdateProfile = async () => {
+    // --- VALIDATION: Check for username ---
+    if (!form.username || form.username.trim().length < 3) {
+      notifyError("Username is required and must be at least 3 characters.");
+      return;
+    }
+    // ------------------------------------
+
     setLoading(true);
     try {
+      // 'form' state now includes username, matching the backend
       await updateMe(form);
       notifySuccess("Profile updated successfully!");
       await refreshUserProfile(); // Refresh auth context user
@@ -69,10 +82,7 @@ export default function ProfileScreen() {
   };
 
   const handleChangePassword = async () => {
-    if (
-      !passwordForm.currentPassword ||
-      !passwordForm.newPassword
-    ) {
+    if (!passwordForm.currentPassword || !passwordForm.newPassword) {
       notifyError("Please fill in both password fields.");
       return;
     }
@@ -123,6 +133,16 @@ export default function ProfileScreen() {
             <Text style={styles.cardTitle}>My Profile</Text>
             <Text style={styles.emailText}>{user.email}</Text>
 
+            {/* --- ADDED: Username Input --- */}
+            <Text style={styles.label}>Username*</Text>
+            <TextInput
+              style={styles.input}
+              value={form.username}
+              onChangeText={(val) => handleFormChange("username", val)}
+              placeholder="Your Username"
+              autoCapitalize="none"
+            />
+
             <Text style={styles.label}>Full Name</Text>
             <TextInput
               style={styles.input}
@@ -170,9 +190,7 @@ export default function ProfileScreen() {
             style={styles.input}
             secureTextEntry
             value={passwordForm.newPassword}
-            onChangeText={(val) =>
-              handlePasswordFormChange("newPassword", val)
-            }
+            onChangeText={(val) => handlePasswordFormChange("newPassword", val)}
             placeholder="New Password"
           />
 
@@ -189,14 +207,12 @@ export default function ProfileScreen() {
 
         {/* Logout Button added here for clarity */}
         <Pressable
-            style={[styles.button, styles.logoutButton]}
-            onPress={logout}
-            disabled={loading}
-          >
-            <Text style={styles.buttonText}>
-              Logout
-            </Text>
-          </Pressable>
+          style={[styles.button, styles.logoutButton]}
+          onPress={logout}
+          disabled={loading}
+        >
+          <Text style={styles.buttonText}>Logout</Text>
+        </Pressable>
       </ScrollView>
     </View>
   );
@@ -267,5 +283,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.secondary, // Use danger color
     marginTop: 30,
     marginBottom: 20,
-  }
+  },
 });
