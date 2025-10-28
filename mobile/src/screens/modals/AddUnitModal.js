@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react"; // Added useCallback
 import {
   Modal,
   View,
@@ -33,18 +33,53 @@ export default function AddUnitModal({ route, navigation }) {
     specifications: { floorArea: "", bedrooms: "", bathrooms: "" },
     description: "", // Add description state
     amenities: [], // Add amenities state
-    // Add photos/videos later if needed, starting simple
   });
 
+  // --- State for single amenity input ---
+  const [currentAmenity, setCurrentAmenity] = useState("");
+  // ------------------------------------------
+
+  // --- Function to add amenity ---
+  const handleAddAmenity = useCallback(() => {
+    const trimmedAmenity = currentAmenity.trim();
+    if (trimmedAmenity && !form.amenities.includes(trimmedAmenity)) {
+      setForm((prevForm) => ({
+        ...prevForm,
+        amenities: [...prevForm.amenities, trimmedAmenity],
+      }));
+      setCurrentAmenity(""); // Clear input after adding
+    } else if (!trimmedAmenity) {
+      // Optional notification for empty input
+      // notifyError("Amenity cannot be empty.");
+    } else {
+      // Optional notification if amenity already exists
+      // notifyError(`"${trimmedAmenity}" has already been added.`);
+      setCurrentAmenity(""); // Still clear input
+    }
+  }, [currentAmenity, form.amenities]);
+  // ------------------------------------
+
+  // --- Function to remove amenity ---
+  const handleRemoveAmenity = useCallback((amenityToRemove) => {
+    setForm((prevForm) => ({
+      ...prevForm,
+      amenities: prevForm.amenities.filter(
+        (amenity) => amenity !== amenityToRemove
+      ),
+    }));
+  }, []);
+  // ---------------------------------------
+
   async function save() {
-    if (!form.unitNumber) {
-      notifyError("Unit Number is required.");
+    if (!form.unitNumber || !form.price) {
+      // Added price validation
+      notifyError("Unit Number and Price are required (*).");
       return;
     }
     setSaving(true);
     try {
       const payload = {
-        ...form,
+        ...form, // Includes description and amenities array
         price: Number(form.price || 0),
         specifications: {
           floorArea: Number(form.specifications.floorArea || 0),
@@ -116,21 +151,52 @@ export default function AddUnitModal({ route, navigation }) {
                 multiline
               />
             </L>
-            <L label="Unit Amenities (comma-separated)">
-              <T
-                value={form.amenities.join(", ")}
-                onChangeText={(v) =>
-                  setForm((s) => ({
-                    ...s,
-                    amenities: v
-                      .split(",")
-                      .map((a) => a.trim())
-                      .filter(Boolean),
-                  }))
-                }
-                placeholder="e.g., Balcony, Air Conditioning, Ensuite Bathroom"
-              />
+            {/* --- UPDATED Amenities Input Section --- */}
+            <L label="Unit Amenities">
+              <View style={styles.amenityInputContainer}>
+                <T
+                  style={styles.amenityInput}
+                  value={currentAmenity}
+                  onChangeText={setCurrentAmenity}
+                  placeholder="Type amenity and press Add"
+                  onSubmitEditing={handleAddAmenity} // Optional: Add on enter key
+                />
+                <Pressable
+                  style={[
+                    styles.addButton,
+                    !currentAmenity.trim() && styles.addButtonDisabled,
+                  ]}
+                  onPress={handleAddAmenity}
+                  disabled={!currentAmenity.trim()}
+                >
+                  <Text style={styles.addButtonText}>Add</Text>
+                </Pressable>
+              </View>
+              {/* Display added amenities */}
+              <View style={styles.amenitiesList}>
+                {form.amenities.map((amenity, index) => (
+                  <View key={index} style={styles.amenityTag}>
+                    <Text style={styles.amenityTagText}>{amenity}</Text>
+                    <Pressable
+                      onPress={() => handleRemoveAmenity(amenity)}
+                      style={styles.removeButton}
+                    >
+                      <Ionicons
+                        name="close-circle"
+                        size={18}
+                        color={colors.danger}
+                      />
+                    </Pressable>
+                  </View>
+                ))}
+                {form.amenities.length === 0 && (
+                  <Text style={styles.noAmenitiesText}>
+                    No amenities added yet.
+                  </Text>
+                )}
+              </View>
             </L>
+            {/* -------------------------------------- */}
             <L label="Floor Area (sqm)">
               <T
                 value={form.specifications.floorArea}
@@ -184,10 +250,11 @@ export default function AddUnitModal({ route, navigation }) {
             </Pressable>
             <Pressable
               onPress={save}
-              disabled={saving || !form.unitNumber}
+              disabled={saving || !form.unitNumber || !form.price} // Added price validation
               style={[
                 styles.button,
-                (saving || !form.unitNumber) && styles.buttonDisabled,
+                (saving || !form.unitNumber || !form.price) &&
+                  styles.buttonDisabled, // Added price validation
               ]}
             >
               {saving ? (
@@ -333,4 +400,61 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#fff", // Match TextInput background
   },
+  // --- Amenity Input Styles ---
+  amenityInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  amenityInput: {
+    flex: 1, // Take available space
+  },
+  addButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    height: 44, // Match input height
+    justifyContent: "center",
+  },
+  addButtonDisabled: {
+    backgroundColor: colors.muted,
+    opacity: 0.7,
+  },
+  addButtonText: {
+    color: colors.white,
+    fontWeight: "600",
+  },
+  amenitiesList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 10,
+    gap: 8, // Add gap between tags
+  },
+  amenityTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.light,
+    borderRadius: 15,
+    paddingVertical: 5,
+    paddingLeft: 10,
+    paddingRight: 5, // Less padding on the right for the button
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  amenityTagText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    marginRight: 4,
+  },
+  removeButton: {
+    // Style for the 'x' button next to the tag
+    padding: 2, // Small padding for touch area
+  },
+  noAmenitiesText: {
+    fontSize: 13,
+    color: colors.muted,
+    fontStyle: "italic",
+  },
+  // ---------------------------------
 });
