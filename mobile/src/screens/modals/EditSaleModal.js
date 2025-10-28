@@ -11,7 +11,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons"; // Added Icons
 import { colors } from "../../theme/colors";
-// Removed listProperties as it's not needed for editing the core details
+// --- 1. Import useRoute and useNavigation ---
+import { useRoute, useNavigation } from "@react-navigation/native";
 import { updateSale } from "../../api/sales";
 import PickerModal from "../../components/PickerModal";
 import { notifyError, notifySuccess } from "../../utils/notify"; // Added notifications
@@ -19,8 +20,16 @@ import { notifyError, notifySuccess } from "../../utils/notify"; // Added notifi
 const FINANCING_TYPES = ["cash", "pag_ibig", "in_house", "others"]; // Corrected
 const SALE_STATUS_OPTIONS = ["pending", "closed", "cancelled"]; // Added status options
 
-export default function EditSaleModal({ sale, onClose }) {
-  const open = !!sale; // Boolean check if sale object exists
+// --- 2. Change props to accept navigation/route (or none) ---
+export default function EditSaleModal() {
+  // --- 3. Get navigation, route, and sale object ---
+  const navigation = useNavigation();
+  const route = useRoute();
+  const { sale } = route.params || {}; // Get sale from route.params
+
+  // --- 4. The modal is now the screen, so it's always 'open' ---
+  // const open = !!sale; // This is no longer needed
+
   const [saving, setSaving] = useState(false);
   const [financePickerOpen, setFinancePickerOpen] = useState(false);
   const [statusPickerOpen, setStatusPickerOpen] = useState(false); // State for status picker
@@ -72,9 +81,11 @@ export default function EditSaleModal({ sale, onClose }) {
         source: sale.source || "",
       });
     } else {
-      setForm(initialFormState); // Reset if sale becomes null (modal closes)
+      // If no sale object is found, go back
+      notifyError("Sale data not found.");
+      navigation.goBack();
     }
-  }, [sale]); // Depend on the sale object
+  }, [sale, navigation]); // Depend on the sale object and navigation
 
   async function save() {
     // Validation
@@ -106,7 +117,10 @@ export default function EditSaleModal({ sale, onClose }) {
 
       await updateSale(sale._id, payload);
       notifySuccess("Sale updated successfully!");
-      onClose(true); // Signal reload
+
+      // --- 5. Use navigation.goBack() instead of onClose ---
+      navigation.goBack();
+      // The SalesScreen useFocusEffect will handle reloading
     } catch (e) {
       notifyError(e?.response?.data?.message || "Failed to update sale");
     } finally {
@@ -116,17 +130,20 @@ export default function EditSaleModal({ sale, onClose }) {
 
   return (
     <Modal
-      visible={open}
+      // --- 6. Set visible to true (navigation handles showing/hiding) ---
+      visible={true}
       transparent
       animationType="fade"
-      onRequestClose={() => onClose(false)}
+      // --- 7. Use navigation.goBack() for request close ---
+      onRequestClose={() => navigation.goBack()}
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Update Sales Record</Text>
             <Pressable
-              onPress={() => onClose(false)}
+              // --- 8. Use navigation.goBack() for close button ---
+              onPress={() => navigation.goBack()}
               style={styles.closeButton}
             >
               <Ionicons name="close-circle" size={28} color={colors.muted} />
@@ -257,7 +274,8 @@ export default function EditSaleModal({ sale, onClose }) {
 
           <View style={styles.navigation}>
             <Pressable
-              onPress={() => onClose(false)}
+              // --- 9. Use navigation.goBack() for cancel button ---
+              onPress={() => navigation.goBack()}
               style={[styles.button, styles.buttonOutline]}
             >
               <Text style={styles.buttonOutlineText}>Cancel</Text>
@@ -281,7 +299,7 @@ export default function EditSaleModal({ sale, onClose }) {
         </View>
       </View>
 
-      {/* Status Picker */}
+      {/* --- Picker Modals --- */}
       <PickerModal
         visible={statusPickerOpen}
         onClose={() => setStatusPickerOpen(false)}
@@ -296,7 +314,6 @@ export default function EditSaleModal({ sale, onClose }) {
           setStatusPickerOpen(false);
         }}
       />
-      {/* Financing Picker */}
       <PickerModal
         visible={financePickerOpen}
         onClose={() => setFinancePickerOpen(false)}
@@ -311,12 +328,11 @@ export default function EditSaleModal({ sale, onClose }) {
           setFinancePickerOpen(false);
         }}
       />
-      {/* Removed Property Picker - Not needed/editable */}
     </Modal>
   );
 }
 
-// --- COPY L & T and Styles from AddUnitModal here ---
+// --- L & T Components ---
 function L({ label, children, style }) {
   return (
     <View style={[styles.labelContainer, style]}>
@@ -340,6 +356,7 @@ function T(props) {
   );
 }
 
+// --- Styles ---
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
