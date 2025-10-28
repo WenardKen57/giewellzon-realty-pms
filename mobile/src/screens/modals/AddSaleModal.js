@@ -1,75 +1,73 @@
 import React, { useEffect, useState, useMemo } from "react";
 import {
-  Modal,
+  Modal as RNModal, // Use RNModal to avoid conflict if needed, or remove if not using Modal component directly
   View,
   Text,
   TextInput,
   Pressable,
-  ScrollView, // Added ScrollView
-  StyleSheet, // Added StyleSheet
-  ActivityIndicator, // Added ActivityIndicator
+  ScrollView,
+  StyleSheet,
+  ActivityIndicator,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons"; // Added Icons
+import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
-import { listProperties, listUnitsForProperty } from "../../api/properties"; // Added listUnitsForProperty
+import { listProperties, listUnitsForProperty } from "../../api/properties";
 import { createSale } from "../../api/sales";
 import PickerModal from "../../components/PickerModal";
-import { notifyError, notifySuccess } from "../../utils/notify"; // Added notifications
+import { notifyError, notifySuccess } from "../../utils/notify";
 
-const FINANCING_TYPES = ["cash", "pag_ibig", "in_house", "others"]; // Corrected pagibig, removed bank_loan unless needed
+const FINANCING_TYPES = ["cash", "pag_ibig", "in_house", "others"];
 
-export default function AddSaleModal({ open, onClose }) {
+// Accept 'navigation' prop instead of 'open' and 'onClose'
+export default function AddSaleModal({ navigation }) {
   const [saving, setSaving] = useState(false);
   const [propsList, setPropsList] = useState([]);
-  const [unitsList, setUnitsList] = useState([]); // State for units
+  const [unitsList, setUnitsList] = useState([]);
   const [loadingUnits, setLoadingUnits] = useState(false);
 
   const [propPickerOpen, setPropPickerOpen] = useState(false);
-  const [unitPickerOpen, setUnitPickerOpen] = useState(false); // State for unit picker
+  const [unitPickerOpen, setUnitPickerOpen] = useState(false);
   const [financePickerOpen, setFinancePickerOpen] = useState(false);
 
-  // Initial form state
+  // Initial form state (remains the same)
   const initialFormState = {
     propertyId: "",
-    unitId: "", // Added unitId
+    unitId: "",
     buyerName: "",
     buyerEmail: "",
     buyerPhone: "",
     salePrice: "",
-    saleDate: "", // Consider adding closingDate if needed by backend
+    saleDate: "",
     financingType: "cash",
     agentName: "",
     agentEmail: "",
     agentPhone: "",
-    // commissionRate: "", // Optional, if you calculate on frontend
     notes: "",
-    source: "", // Optional source field
+    source: "",
   };
   const [form, setForm] = useState(initialFormState);
 
-  // Fetch properties when modal opens
+  // Fetch properties on mount
   useEffect(() => {
-    if (open) {
-      listProperties({ limit: 500 }) // Fetch all properties? Or filter differently?
-        .then((data) => setPropsList(data || [])) // Directly use data array
-        .catch(() => notifyError("Failed to load properties"));
-    } else {
-      // Reset form when closing
+    listProperties({ limit: 500 })
+      .then((response) => setPropsList(response.data || []))
+      .catch(() => notifyError("Failed to load properties"));
+    // Cleanup function to reset form if needed when screen unmounts
+    return () => {
       setForm(initialFormState);
       setUnitsList([]);
       setPropsList([]);
-    }
-  }, [open]);
+    };
+  }, []); // Run only on mount
 
-  // Fetch units when propertyId changes
+  // Fetch units when propertyId changes (remains the same)
   useEffect(() => {
     const fetchUnits = async () => {
       if (form.propertyId) {
         setLoadingUnits(true);
-        setUnitsList([]); // Clear previous units
+        setUnitsList([]);
         try {
           const unitsData = await listUnitsForProperty(form.propertyId);
-          // Filter for available units only
           const availableUnits = unitsData.filter(
             (u) => u.status === "available"
           );
@@ -81,16 +79,15 @@ export default function AddSaleModal({ open, onClose }) {
           setLoadingUnits(false);
         }
       } else {
-        setUnitsList([]); // Clear if no property selected
+        setUnitsList([]);
       }
     };
     fetchUnits();
-    // Reset unitId if property changes
     setForm((s) => ({ ...s, unitId: "" }));
   }, [form.propertyId]);
 
   async function save() {
-    // Validation
+    // Validation remains the same
     if (
       !form.propertyId ||
       !form.unitId ||
@@ -100,16 +97,13 @@ export default function AddSaleModal({ open, onClose }) {
       notifyError("Please fill in all required fields (*).");
       return;
     }
-
     setSaving(true);
     try {
+      // Payload creation remains the same
       const payload = {
         ...form,
         salePrice: Number(form.salePrice || 0),
-        // Add closingDate if needed: closingDate: form.closingDate || undefined,
-        // Add commissionRate if needed: commissionRate: Number(form.commissionRate || 0),
       };
-      // Remove empty optional fields if backend expects them not present
       if (!payload.buyerEmail) delete payload.buyerEmail;
       if (!payload.buyerPhone) delete payload.buyerPhone;
       if (!payload.agentName) delete payload.agentName;
@@ -118,11 +112,13 @@ export default function AddSaleModal({ open, onClose }) {
       if (!payload.notes) delete payload.notes;
       if (!payload.source) delete payload.source;
       if (!payload.saleDate)
-        payload.saleDate = new Date().toISOString().split("T")[0]; // Default saleDate if empty
+        payload.saleDate = new Date().toISOString().split("T")[0];
 
       await createSale(payload);
       notifySuccess("Sale recorded successfully!");
-      onClose(true); // Signal to reload data on the previous screen
+      // --- Use navigation.goBack() ---
+      navigation.goBack();
+      // SalesScreen's useFocusEffect will handle reload
     } catch (e) {
       notifyError(e?.response?.data?.message || "Failed to record sale");
     } finally {
@@ -130,16 +126,15 @@ export default function AddSaleModal({ open, onClose }) {
     }
   }
 
-  // Options for pickers
+  // Options for pickers (remains the same)
   const propertyOptions = propsList.map((p) => ({
     label: p.propertyName,
     value: p._id,
   }));
   const unitOptions = unitsList.map((u) => ({
-    label: `Unit ${u.unitNumber} - ₱${Number(u.price).toLocaleString()}`, // Display unit number and price
+    label: `Unit ${u.unitNumber} - ₱${Number(u.price).toLocaleString()}`,
     value: u._id,
   }));
-
   const selectedPropertyLabel =
     propertyOptions.find((o) => o.value === form.propertyId)?.label ||
     "Select building/property*";
@@ -147,244 +142,232 @@ export default function AddSaleModal({ open, onClose }) {
     unitOptions.find((o) => o.value === form.unitId)?.label ||
     "Select available unit*";
 
+  // --- Render as a View, not a Modal component ---
   return (
-    <Modal
-      visible={open}
-      transparent
-      animationType="fade"
-      onRequestClose={() => onClose(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Record New Sale</Text>
+    <View style={styles.modalOverlay}>
+      <View style={styles.modalContent}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Record New Sale</Text>
+          {/* --- Use navigation.goBack() for close button --- */}
+          <Pressable
+            onPress={() => navigation.goBack()}
+            style={styles.closeButton}
+          >
+            <Ionicons name="close-circle" size={28} color={colors.muted} />
+          </Pressable>
+        </View>
+
+        <ScrollView style={styles.formContainer}>
+          {/* Property Selection */}
+          <L label="Property Building*">
             <Pressable
-              onPress={() => onClose(false)}
-              style={styles.closeButton}
+              onPress={() => setPropPickerOpen(true)}
+              style={styles.pickerButton}
             >
-              <Ionicons name="close-circle" size={28} color={colors.muted} />
+              <Text
+                style={{ color: form.propertyId ? colors.text : colors.muted }}
+                numberOfLines={1}
+              >
+                {selectedPropertyLabel}
+              </Text>
             </Pressable>
-          </View>
+          </L>
 
-          <ScrollView style={styles.formContainer}>
-            {/* Property Selection */}
-            <L label="Property Building*">
-              <Pressable
-                onPress={() => setPropPickerOpen(true)}
-                style={styles.pickerButton}
-              >
-                <Text
-                  style={{
-                    color: form.propertyId ? colors.text : colors.muted,
-                  }}
-                  numberOfLines={1}
-                >
-                  {selectedPropertyLabel}
-                </Text>
-              </Pressable>
-            </L>
-
-            {/* Unit Selection (conditional) */}
-            <L label="Unit*">
-              <Pressable
-                onPress={() => setUnitPickerOpen(true)}
-                style={[
-                  styles.pickerButton,
-                  !form.propertyId && styles.pickerButtonDisabled,
-                ]}
-                disabled={!form.propertyId || loadingUnits}
-              >
-                <Text
-                  style={{ color: form.unitId ? colors.text : colors.muted }}
-                  numberOfLines={1}
-                >
-                  {loadingUnits
-                    ? "Loading Units..."
-                    : unitsList.length === 0 && form.propertyId
-                    ? "No Available Units"
-                    : selectedUnitLabel}
-                </Text>
-              </Pressable>
-            </L>
-
-            {/* Buyer Info */}
-            <L label="Buyer Name*">
-              <T
-                value={form.buyerName}
-                onChangeText={(v) => setForm((s) => ({ ...s, buyerName: v }))}
-                placeholder="Enter buyer's full name"
-              />
-            </L>
-            <L label="Buyer Email">
-              <T
-                value={form.buyerEmail}
-                onChangeText={(v) => setForm((s) => ({ ...s, buyerEmail: v }))}
-                placeholder="buyer@example.com"
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </L>
-            <L label="Buyer Phone">
-              <T
-                value={form.buyerPhone}
-                onChangeText={(v) => setForm((s) => ({ ...s, buyerPhone: v }))}
-                placeholder="e.g., +639..."
-                keyboardType="phone-pad"
-              />
-            </L>
-
-            {/* Sale Details */}
-            <L label="Sale Price*">
-              <T
-                value={form.salePrice}
-                onChangeText={(v) => setForm((s) => ({ ...s, salePrice: v }))}
-                placeholder="Enter final sale price"
-                keyboardType="numeric"
-              />
-            </L>
-            <L label="Sale Date (YYYY-MM-DD)">
-              <T
-                value={form.saleDate}
-                onChangeText={(v) => setForm((s) => ({ ...s, saleDate: v }))}
-                placeholder={new Date().toISOString().split("T")[0]}
-              />
-            </L>
-            {/* Optional: <L label="Closing Date (YYYY-MM-DD)"><T value={form.closingDate} onChangeText={(v) => setForm((s) => ({ ...s, closingDate: v }))} placeholder="Optional" /></L> */}
-
-            <L label="Financing Type">
-              <Pressable
-                onPress={() => setFinancePickerOpen(true)}
-                style={styles.pickerButton}
-              >
-                <Text style={{ color: colors.text }}>{form.financingType}</Text>
-              </Pressable>
-            </L>
-
-            {/* Agent Info */}
-            <L label="Agent Name">
-              <T
-                value={form.agentName}
-                onChangeText={(v) => setForm((s) => ({ ...s, agentName: v }))}
-                placeholder="Agent's full name"
-              />
-            </L>
-            <L label="Agent Email">
-              <T
-                value={form.agentEmail}
-                onChangeText={(v) => setForm((s) => ({ ...s, agentEmail: v }))}
-                placeholder="agent@example.com"
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </L>
-            <L label="Agent Phone">
-              <T
-                value={form.agentPhone}
-                onChangeText={(v) => setForm((s) => ({ ...s, agentPhone: v }))}
-                placeholder="e.g., +639..."
-                keyboardType="phone-pad"
-              />
-            </L>
-            {/* Optional: <L label="Commission Rate (%)"><T value={form.commissionRate} onChangeText={(v) => setForm(s => ({...s, commissionRate: v}))} placeholder="e.g., 3" keyboardType="numeric"/></L> */}
-
-            {/* Other */}
-            <L label="Notes">
-              <T
-                value={form.notes}
-                onChangeText={(v) => setForm((s) => ({ ...s, notes: v }))}
-                placeholder="Optional notes about the sale"
-                multiline
-              />
-            </L>
-            {/* Optional: <L label="Source"><T value={form.source} onChangeText={(v) => setForm(s => ({...s, source: v}))} placeholder="e.g., website, referral"/></L> */}
-          </ScrollView>
-
-          <View style={styles.navigation}>
+          {/* Unit Selection (conditional) */}
+          <L label="Unit*">
             <Pressable
-              onPress={() => onClose(false)}
-              style={[styles.button, styles.buttonOutline]}
+              onPress={() => setUnitPickerOpen(true)}
+              style={[
+                styles.pickerButton,
+                !form.propertyId && styles.pickerButtonDisabled,
+              ]}
+              disabled={!form.propertyId || loadingUnits}
             >
-              <Text style={styles.buttonOutlineText}>Cancel</Text>
+              <Text
+                style={{ color: form.unitId ? colors.text : colors.muted }}
+                numberOfLines={1}
+              >
+                {loadingUnits
+                  ? "Loading Units..."
+                  : unitsList.length === 0 && form.propertyId
+                  ? "No Available Units"
+                  : selectedUnitLabel}
+              </Text>
             </Pressable>
+          </L>
+
+          {/* Buyer Info */}
+          <L label="Buyer Name*">
+            <T
+              value={form.buyerName}
+              onChangeText={(v) => setForm((s) => ({ ...s, buyerName: v }))}
+              placeholder="Enter buyer's full name"
+            />
+          </L>
+          <L label="Buyer Email">
+            <T
+              value={form.buyerEmail}
+              onChangeText={(v) => setForm((s) => ({ ...s, buyerEmail: v }))}
+              placeholder="buyer@example.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          </L>
+          <L label="Buyer Phone">
+            <T
+              value={form.buyerPhone}
+              onChangeText={(v) => setForm((s) => ({ ...s, buyerPhone: v }))}
+              placeholder="e.g., +639..."
+              keyboardType="phone-pad"
+            />
+          </L>
+
+          {/* Sale Details */}
+          <L label="Sale Price*">
+            <T
+              value={form.salePrice}
+              onChangeText={(v) => setForm((s) => ({ ...s, salePrice: v }))}
+              placeholder="Enter final sale price"
+              keyboardType="numeric"
+            />
+          </L>
+          <L label="Sale Date (YYYY-MM-DD)">
+            <T
+              value={form.saleDate}
+              onChangeText={(v) => setForm((s) => ({ ...s, saleDate: v }))}
+              placeholder={new Date().toISOString().split("T")[0]}
+            />
+          </L>
+
+          <L label="Financing Type">
             <Pressable
-              onPress={save}
-              disabled={
-                saving ||
+              onPress={() => setFinancePickerOpen(true)}
+              style={styles.pickerButton}
+            >
+              <Text style={{ color: colors.text }}>{form.financingType}</Text>
+            </Pressable>
+          </L>
+
+          {/* Agent Info */}
+          <L label="Agent Name">
+            <T
+              value={form.agentName}
+              onChangeText={(v) => setForm((s) => ({ ...s, agentName: v }))}
+              placeholder="Agent's full name"
+            />
+          </L>
+          <L label="Agent Email">
+            <T
+              value={form.agentEmail}
+              onChangeText={(v) => setForm((s) => ({ ...s, agentEmail: v }))}
+              placeholder="agent@example.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          </L>
+          <L label="Agent Phone">
+            <T
+              value={form.agentPhone}
+              onChangeText={(v) => setForm((s) => ({ ...s, agentPhone: v }))}
+              placeholder="e.g., +639..."
+              keyboardType="phone-pad"
+            />
+          </L>
+
+          {/* Other */}
+          <L label="Notes">
+            <T
+              value={form.notes}
+              onChangeText={(v) => setForm((s) => ({ ...s, notes: v }))}
+              placeholder="Optional notes about the sale"
+              multiline
+            />
+          </L>
+        </ScrollView>
+
+        <View style={styles.navigation}>
+          {/* --- Use navigation.goBack() for cancel button --- */}
+          <Pressable
+            onPress={() => navigation.goBack()}
+            style={[styles.button, styles.buttonOutline]}
+          >
+            <Text style={styles.buttonOutlineText}>Cancel</Text>
+          </Pressable>
+          <Pressable
+            onPress={save}
+            disabled={
+              saving ||
+              !form.propertyId ||
+              !form.unitId ||
+              !form.buyerName ||
+              !form.salePrice
+            }
+            style={[
+              styles.button,
+              (saving ||
                 !form.propertyId ||
                 !form.unitId ||
                 !form.buyerName ||
-                !form.salePrice
-              }
-              style={[
-                styles.button,
-                (saving ||
-                  !form.propertyId ||
-                  !form.unitId ||
-                  !form.buyerName ||
-                  !form.salePrice) &&
-                  styles.buttonDisabled,
-              ]}
-            >
-              {saving ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>Record Sale</Text>
-              )}
-            </Pressable>
-          </View>
+                !form.salePrice) &&
+                styles.buttonDisabled,
+            ]}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Record Sale</Text>
+            )}
+          </Pressable>
         </View>
-      </View>
 
-      {/* Property Picker */}
-      <PickerModal
-        visible={propPickerOpen}
-        onClose={() => setPropPickerOpen(false)}
-        title="Select Property Building"
-        options={propertyOptions}
-        value={form.propertyId}
-        onSelect={(v) => {
-          setForm((s) => ({ ...s, propertyId: v, unitId: "" })); // Reset unitId when property changes
-          setPropPickerOpen(false);
-        }}
-      />
-      {/* Unit Picker */}
-      <PickerModal
-        visible={unitPickerOpen}
-        onClose={() => setUnitPickerOpen(false)}
-        title="Select Available Unit"
-        options={unitOptions}
-        value={form.unitId}
-        onSelect={(v) => {
-          setForm((s) => ({ ...s, unitId: v }));
-          setUnitPickerOpen(false);
-        }}
-        // Add a message if no units are available
-        emptyMessage={
-          unitsList.length === 0 && form.propertyId
-            ? "No available units found for this property."
-            : "Please select a property first."
-        }
-      />
-      {/* Financing Picker */}
-      <PickerModal
-        visible={financePickerOpen}
-        onClose={() => setFinancePickerOpen(false)}
-        title="Financing Type"
-        options={FINANCING_TYPES.map((t) => ({
-          label: t.replace("_", " ").toUpperCase(),
-          value: t,
-        }))}
-        value={form.financingType}
-        onSelect={(v) => {
-          setForm((s) => ({ ...s, financingType: v }));
-          setFinancePickerOpen(false);
-        }}
-      />
-    </Modal>
+        {/* --- Picker Modals remain inside --- */}
+        <PickerModal
+          visible={propPickerOpen}
+          onClose={() => setPropPickerOpen(false)}
+          title="Select Property Building"
+          options={propertyOptions}
+          value={form.propertyId}
+          onSelect={(v) => {
+            setForm((s) => ({ ...s, propertyId: v, unitId: "" }));
+            setPropPickerOpen(false);
+          }}
+        />
+        <PickerModal
+          visible={unitPickerOpen}
+          onClose={() => setUnitPickerOpen(false)}
+          title="Select Available Unit"
+          options={unitOptions}
+          value={form.unitId}
+          onSelect={(v) => {
+            setForm((s) => ({ ...s, unitId: v }));
+            setUnitPickerOpen(false);
+          }}
+          emptyMessage={
+            unitsList.length === 0 && form.propertyId
+              ? "No available units found for this property."
+              : "Please select a property first."
+          }
+        />
+        <PickerModal
+          visible={financePickerOpen}
+          onClose={() => setFinancePickerOpen(false)}
+          title="Financing Type"
+          options={FINANCING_TYPES.map((t) => ({
+            label: t.replace("_", " ").toUpperCase(),
+            value: t,
+          }))}
+          value={form.financingType}
+          onSelect={(v) => {
+            setForm((s) => ({ ...s, financingType: v }));
+            setFinancePickerOpen(false);
+          }}
+        />
+      </View>
+    </View>
   );
 }
 
-// --- COPY L & T and Styles from AddUnitModal here ---
+// --- L & T Components ---
 function L({ label, children, style }) {
   return (
     <View style={[styles.labelContainer, style]}>
@@ -401,25 +384,28 @@ function T(props) {
   return (
     <TextInput
       {...props}
-      placeholderTextColor={colors.muted} // Use muted color for placeholder
+      placeholderTextColor={colors.muted}
       underlineColorAndroid="transparent"
       style={[baseStyle, props.style]}
     />
   );
 }
 
+// --- Styles ---
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)", // Darker overlay
-    justifyContent: "center",
-    padding: 16,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    paddingTop: 40, // Adjust as needed for status bar/notch
+    paddingHorizontal: 0,
+    paddingBottom: 0,
   },
   modalContent: {
+    flex: 1,
     backgroundColor: colors.white,
-    borderRadius: 12,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
     padding: 16,
-    maxHeight: "90%", // Allow slightly more height
   },
   modalHeader: {
     flexDirection: "row",
@@ -443,11 +429,15 @@ const styles = StyleSheet.create({
     top: -5,
     padding: 5,
   },
-  formContainer: { maxHeight: "75%", paddingBottom: 10, paddingTop: 10 },
+  formContainer: {
+    flex: 1, // Make ScrollView take available space
+    paddingBottom: 10, // Add padding at bottom if needed
+    paddingTop: 10,
+  },
   navigation: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 16, // Increased margin
+    marginTop: 16,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     paddingTop: 12,
@@ -467,23 +457,23 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   buttonOutlineText: { color: colors.text, fontWeight: "600" },
-  buttonDisabled: { backgroundColor: colors.muted, opacity: 0.7 }, // Use muted color
+  buttonDisabled: { backgroundColor: colors.muted, opacity: 0.7 },
   labelContainer: { marginBottom: 12 },
   labelText: {
-    color: colors.textSecondary, // Use secondary text color
+    color: colors.textSecondary,
     fontSize: 13,
     marginBottom: 4,
     fontWeight: "500",
   },
   textInputBase: {
     borderWidth: 1,
-    borderColor: colors.border, // Use border color
+    borderColor: colors.border,
     borderRadius: 8,
     paddingHorizontal: 12,
-    backgroundColor: colors.white, // Keep white or use light gray?
+    backgroundColor: colors.white,
     height: 44,
     color: colors.text,
-    fontSize: 14, // Slightly smaller font
+    fontSize: 14,
   },
   textInputMultiline: {
     minHeight: 80,
@@ -496,13 +486,13 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 10, // Consistent padding
+    paddingVertical: 10,
     height: 44,
     justifyContent: "center",
     backgroundColor: colors.white,
   },
   pickerButtonDisabled: {
-    backgroundColor: colors.light, // Use light background for disabled
+    backgroundColor: colors.light,
     borderColor: colors.border,
     opacity: 0.7,
   },

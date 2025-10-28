@@ -69,7 +69,7 @@ export async function listUnitsForProperty(propertyId) {
     const endpoint = `properties/${propertyId}/units`;
     const { data } = await api.get(endpoint);
     // Backend returns { data: Unit[] }
-    return data.data || [];
+    return data || [];
   } catch (error) {
     console.error(`Error fetching units for property ${propertyId}:`, error);
     throw error;
@@ -152,7 +152,7 @@ export async function listProperties(filters = {}) {
   try {
     const { data } = await api.get(endpoints.properties.root, { params });
     // Backend returns { data: [], total, page, limit }
-    return data.data || [];
+    return data || [];
   } catch (error) {
     console.error("Error fetching properties:", error);
     throw error;
