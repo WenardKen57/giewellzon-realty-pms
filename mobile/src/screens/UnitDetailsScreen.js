@@ -11,7 +11,12 @@ import {
   useWindowDimensions, // For gallery image width
   FlatList, // For photo gallery
 } from "react-native";
-import { useRoute, useNavigation } from "@react-navigation/native";
+// --- 1. Import useFocusEffect ---
+import {
+  useRoute,
+  useNavigation,
+  useFocusEffect,
+} from "@react-navigation/native";
 import { getUnit } from "../api/properties"; // Import the new API function
 import { toAbsoluteUrl } from "../api/client";
 import { colors } from "../theme/colors";
@@ -49,16 +54,19 @@ export default function UnitDetailsScreen() {
     } catch (error) {
       notifyError("Failed to load unit details.");
       console.error("Load Unit Error:", error);
-      // Optionally navigate back if load fails
-      // navigation.goBack();
     } finally {
       setLoading(false);
     }
   }, [unitId]);
 
-  useEffect(() => {
-    loadUnit();
-  }, [loadUnit]);
+  // --- 2. Replace useEffect with useFocusEffect ---
+  // This ensures loadUnit() runs every time the screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadUnit();
+    }, [loadUnit])
+  );
+  // --- End of Fix ---
 
   // Determine the main image (first photo or placeholder)
   const mainImageUrl = toAbsoluteUrl(
@@ -245,8 +253,6 @@ export default function UnitDetailsScreen() {
             />
           </View>
         )}
-
-        {/* Add other unit details here if needed (e.g., video tours) */}
       </View>
     </ScrollView>
   );
@@ -261,7 +267,7 @@ const SpecItem = ({ icon, label, value }) => (
   </View>
 );
 
-// Styles (borrowed and adapted from PropertyDetailsScreen)
+// Styles
 const styles = StyleSheet.create({
   loaderContainer: {
     flex: 1,
@@ -358,18 +364,24 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: 8,
   },
+  // Added descriptionText style
+  descriptionText: {
+    fontSize: 15,
+    color: colors.textSecondary,
+    lineHeight: 22,
+  },
   specGrid: {
     flexDirection: "row",
-    flexWrap: "wrap", // Allow wrapping
-    justifyContent: "flex-start", // Align items to start
+    flexWrap: "wrap",
+    justifyContent: "flex-start",
     marginTop: 8,
   },
   specItem: {
     alignItems: "center",
     padding: 10,
     minWidth: 100,
-    marginBottom: 10, // Add bottom margin for wrap
-    marginRight: 10, // Add right margin for wrap
+    marginBottom: 10,
+    marginRight: 10,
   },
   specLabel: { fontSize: 13, color: colors.textSecondary, marginTop: 4 },
   specValue: {
@@ -377,6 +389,22 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.text,
     marginTop: 2,
+  },
+  // Added amenity styles
+  amenitiesContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 4,
+  },
+  amenityItem: {
+    backgroundColor: colors.light,
+    color: colors.textSecondary,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 15,
+    marginRight: 8,
+    marginBottom: 8,
+    fontSize: 13,
   },
   galleryImage: {
     height: 120,
