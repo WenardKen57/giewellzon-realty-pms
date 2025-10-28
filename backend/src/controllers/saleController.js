@@ -17,18 +17,39 @@ async function createSale(req, res, next) {
   try {
     const b = req.body || {};
 
+    // --- Validation & Unit Check ---
     const unit = await Unit.findById(b.unitId).populate("property");
-    if (!unit) return res.status(400).json({ message: "Invalid unitId" });
+    if (!unit)
+      return res.status(400).json({ message: "Invalid unit selected" }); // More specific message
     if (unit.status !== "available")
       return res
         .status(400)
-        .json({ message: "Unit is not available for sale" });
+        .json({ message: `Unit ${unit.unitNumber} is not available for sale` }); // More specific message
 
     const property = unit.property;
     if (!property)
       return res
         .status(400)
         .json({ message: "Property associated with unit not found" });
+
+    // --- FIX: Robust Date Parsing ---
+    let saleDateObj = b.saleDate ? new Date(b.saleDate) : new Date(); // Default to now if empty
+    let closingDateObj = b.closingDate ? new Date(b.closingDate) : undefined;
+
+    // Check if dates are valid after parsing
+    if (isNaN(saleDateObj.getTime())) {
+      return res
+        .status(400)
+        .json({ message: "Invalid Sale Date format. Please use YYYY-MM-DD." });
+    }
+    if (closingDateObj && isNaN(closingDateObj.getTime())) {
+      return res
+        .status(400)
+        .json({
+          message: "Invalid Closing Date format. Please use YYYY-MM-DD.",
+        });
+    }
+    // --- End of Date Fix ---
 
     const sale = new Sale({
       propertyId: property._id,
@@ -42,9 +63,9 @@ async function createSale(req, res, next) {
       buyerEmail: b.buyerEmail,
       buyerPhone: b.buyerPhone,
       salePrice: Number(b.salePrice),
-      saleDate: b.saleDate ? new Date(b.saleDate) : new Date(),
-      closingDate: b.closingDate ? new Date(b.closingDate) : undefined,
-      status: b.status || (b.closingDate ? "closed" : "pending"),
+      saleDate: saleDateObj, // Use the validated Date object
+      closingDate: closingDateObj, // Use the validated Date object (or undefined)
+      status: b.status || (closingDateObj ? "closed" : "pending"), // Determine status based on valid closingDateObj
       financingType: b.financingType || "cash",
       agentName: b.agentName,
       agentEmail: b.agentEmail,
@@ -54,15 +75,17 @@ async function createSale(req, res, next) {
       source: b.source,
     });
 
-    await sale.save();
+    await sale.save(); // This triggers the pre-save hook
 
+    // Update Unit status
     unit.status = "sold";
-    unit.soldDate = sale.closingDate || sale.saleDate;
+    unit.soldDate = closingDateObj || saleDateObj; // Use the valid date objects
     await unit.save();
 
     res.status(201).json(sale);
   } catch (e) {
-    next(e);
+    console.error("Error in createSale:", e); // Log the detailed error on the backend
+    next(e); // Pass to error handler (results in 500)
   }
 }
 
