@@ -8,7 +8,7 @@ import {
   Image,
   Pressable,
   RefreshControl,
-  Platform, // <-- Import Platform
+  Platform,
 } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { getDashboardAnalytics } from "../api/analytics";
@@ -40,21 +40,25 @@ export default function OverviewScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const loadData = useCallback(async () => {
-    setLoading(true);
+    // Keep loading true if not refreshing to avoid flicker on initial load
+    if (!refreshing) {
+      setLoading(true);
+    }
     try {
       const [statsData, featuredData] = await Promise.all([
         getDashboardAnalytics(),
+        // Assuming getFeaturedProperties returns an array directly now
         getFeaturedProperties(5),
       ]);
       setStats(statsData);
-      setFeatured(featuredData.data || []);
+      setFeatured(featuredData || []); // Use featuredData directly
     } catch (error) {
       notifyError("Failed to load dashboard data.");
       console.error("Load Dashboard Error:", error.response?.data || error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [refreshing]); // Depend on refreshing state
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -81,7 +85,7 @@ export default function OverviewScreen() {
           />
         }
       >
-        {loading && !refreshing ? (
+        {loading && !refreshing ? ( // Show loader only on initial load
           <ActivityIndicator
             size="large"
             color={colors.primary}
@@ -91,27 +95,28 @@ export default function OverviewScreen() {
           <>
             {/* Stats Grid */}
             <View style={styles.statsGrid}>
+              {/* --- FIX: Use correct fields from analyticsController --- */}
               <StatCard
-                title="Total Properties"
-                value={stats?.totalProperties || 0}
-                icon="home"
+                title="Total Buildings" // Changed label
+                value={stats?.buildingCount || 0} // Was totalProperties
+                icon="business" // Changed icon
                 color={colors.primary}
               />
               <StatCard
-                title="Total Sales"
-                value={`₱${(stats?.totalSalesValue || 0).toLocaleString()}`}
+                title="Total Revenue" // Changed label slightly
+                value={`₱${(stats?.totalClosedRevenue || 0).toLocaleString()}`} // Was totalSalesValue
                 icon="cash"
                 color={colors.success}
               />
               <StatCard
-                title="Properties Sold"
-                value={stats?.propertiesSold || 0}
+                title="Units Sold" // Changed label
+                value={stats?.soldUnits || 0} // Was propertiesSold
                 icon="flag"
                 color={colors.warning}
               />
               <StatCard
                 title="Pending Inquiries"
-                value={stats?.pendingInquiries || 0}
+                value={stats?.pendingInquiries || 0} // This was correct
                 icon="chatbox-ellipses"
                 color={colors.danger}
               />
@@ -136,18 +141,19 @@ export default function OverviewScreen() {
                     <Image
                       source={{
                         uri: toAbsoluteUrl(
-                          item.thumbnail?.url ||
-                            item.photos?.[0]?.url ||
+                          // --- FIX: Read image as a direct string ---
+                          item.thumbnail || // Was item.thumbnail?.url
+                            item.photos?.[0] || // Was item.photos?.[0]?.url
                             "https://placehold.co/600x400?text=No+Image"
                         ),
                       }}
                       style={styles.cardImage}
-                      // --- FIX: Add this prop for web ---
                       {...(Platform.OS === "web" && {
                         referrerPolicy: "no-referrer",
                       })}
                     />
                     <View style={styles.cardContent}>
+                      {/* --- FIX: Field name was already correct --- */}
                       <Text style={styles.cardTitle} numberOfLines={1}>
                         {item.propertyName}
                       </Text>
@@ -169,7 +175,7 @@ export default function OverviewScreen() {
   );
 }
 
-// Styles
+// Styles (No changes needed below this line)
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.light },
   scrollContent: { padding: 16 },
@@ -240,12 +246,14 @@ const styles = StyleSheet.create({
   },
   cardImage: {
     width: 100,
-    height: "100%",
+    height: "100%", // Changed for consistent height
+    minHeight: 100, // Ensure minimum height
     backgroundColor: colors.border,
   },
   cardContent: {
     padding: 16,
     flex: 1,
+    justifyContent: "center", // Center content vertically
   },
   cardTitle: {
     fontSize: 16,
