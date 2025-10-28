@@ -3,38 +3,45 @@ import { endpoints } from "./endpoints";
 import { Platform } from "react-native";
 
 // Helper to create FormData compatible with React Native AND Web
-const createFormData = async (body = {}, files = []) => { // <-- Made async
+const createFormData = async (body = {}, files = []) => {
+  // <-- Made async
   const data = new FormData();
 
   // Append files
   // Use Promise.all to fetch blobs in parallel for web
-  await Promise.all(files.map(async (file) => { // <-- Added async/await
-    if (file && file.uri) {
-      // Use provided name/type, fallback to guessing
-      const uriParts = file.uri.split(".");
-      const fileTypeGuess = uriParts[uriParts.length - 1];
-      const fileName = file.name || `file.${fileTypeGuess}`;
-      const fileType = file.type || `image/${fileTypeGuess}`;
+  await Promise.all(
+    files.map(async (file) => {
+      // <-- Added async/await
+      if (file && file.uri) {
+        // Use provided name/type, fallback to guessing
+        const uriParts = file.uri.split(".");
+        const fileTypeGuess = uriParts[uriParts.length - 1];
+        const fileName = file.name || `file.${fileTypeGuess}`;
+        const fileType = file.type || `image/${fileTypeGuess}`;
 
-      if (Platform.OS === 'web') {
-        // On web, fetch the blob from the URI and append it
-        try {
-          const response = await fetch(file.uri);
-          const blob = await response.blob();
-          data.append(file.field || 'file', blob, fileName);
-        } catch (e) {
-          console.error('Error fetching blob for FormData:', e);
+        if (Platform.OS === "web") {
+          // On web, fetch the blob from the URI and append it
+          try {
+            const response = await fetch(file.uri);
+            const blob = await response.blob();
+            data.append(file.field || "file", blob, fileName);
+          } catch (e) {
+            console.error("Error fetching blob for FormData:", e);
+          }
+        } else {
+          // On native, use the { uri, name, type } object
+          data.append(file.field || "file", {
+            uri:
+              Platform.OS === "android"
+                ? file.uri
+                : file.uri.replace("file://", ""),
+            name: fileName,
+            type: fileType,
+          });
         }
-      } else {
-        // On native, use the { uri, name, type } object
-        data.append(file.field || 'file', {
-          uri: Platform.OS === 'android' ? file.uri : file.uri.replace('file://', ''),
-          name: fileName,
-          type: fileType,
-        });
       }
-    }
-  })); // <-- End of Promise.all
+    })
+  ); // <-- End of Promise.all
 
   // Append other body data
   Object.keys(body).forEach((key) => {
@@ -43,6 +50,77 @@ const createFormData = async (body = {}, files = []) => { // <-- Made async
 
   return data;
 };
+export async function createUnit(propertyId, payload) {
+  if (!propertyId) throw new Error("Property ID is required to create a unit");
+  try {
+    // Construct the endpoint using the propertyId
+    const endpoint = `properties/${propertyId}/units`;
+    const { data } = await api.post(endpoint, payload);
+    return data; // Returns the created unit document
+  } catch (error) {
+    console.error(`Error creating unit for property ${propertyId}:`, error);
+    throw error;
+  }
+}
+
+export async function listUnitsForProperty(propertyId) {
+  if (!propertyId) return []; // Or throw error
+  try {
+    const endpoint = `properties/${propertyId}/units`;
+    const { data } = await api.get(endpoint);
+    // Backend returns { data: Unit[] }
+    return data.data || [];
+  } catch (error) {
+    console.error(`Error fetching units for property ${propertyId}:`, error);
+    throw error;
+  }
+}
+
+export async function updateUnit(unitId, payload) {
+  if (!unitId) throw new Error("Unit ID is required for update");
+  try {
+    // Construct the endpoint using the unitId (mounted at /api/units)
+    const endpoint = `units/${unitId}`;
+    const { data } = await api.patch(endpoint, payload);
+    return data; // Returns the updated unit document
+  } catch (error) {
+    console.error(`Error updating unit ${unitId}:`, error);
+    throw error;
+  }
+}
+
+export async function deleteUnit(unitId) {
+  if (!unitId) throw new Error("Unit ID is required for deletion");
+  try {
+    const endpoint = `units/${unitId}`;
+    const { data } = await api.delete(endpoint);
+    return data; // Should return { message: "Unit deleted" }
+  } catch (error) {
+    console.error(`Error deleting unit ${unitId}:`, error);
+    throw error;
+  }
+}
+
+export async function uploadUnitPhotos(unitId, files) {
+  if (!unitId) throw new Error("Unit ID is required for photo upload");
+  if (!files || !files.length) return; // Or throw error
+
+  const formData = await createFormData(
+    {},
+    files.map((f) => ({ ...f, field: "photos" })) // 'photos' matches backend multer field
+  );
+
+  try {
+    const endpoint = `units/${unitId}/upload-photos`;
+    const { data } = await api.post(endpoint, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return data; // Returns updated unit
+  } catch (error) {
+    console.error(`Error uploading photos for unit ${unitId}:`, error);
+    throw error;
+  }
+}
 
 export async function listProperties(filters = {}) {
   // Remove empty filter values
@@ -127,7 +205,7 @@ export async function toggleFeatured(id, currentFeaturedState) {
   try {
     // Pass the desired state to the backend
     const { data } = await api.patch(endpoints.properties.toggleFeatured(id), {
-       featured: !currentFeaturedState
+      featured: !currentFeaturedState,
     });
     return data; // Returns the updated property
   } catch (error) {

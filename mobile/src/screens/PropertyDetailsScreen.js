@@ -10,17 +10,16 @@ import {
   FlatList,
   Pressable,
   useWindowDimensions,
-  Platform, // <-- Platform is already imported
+  Platform,
   Alert,
 } from "react-native";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { useFocusEffect } from "@react-navigation/native";
 import {
-  getProperty,
+  getProperty, // Fetches Property and populates its 'units' array
   toggleFeatured,
-  incrementUnits,
-  decrementUnits,
   delProperty,
+  deleteUnit,
 } from "../api/properties";
 import { toAbsoluteUrl } from "../api/client";
 import { colors } from "../theme/colors";
@@ -46,7 +45,7 @@ export default function PropertyDetailsScreen() {
   const loadProperty = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getProperty(propertyId);
+      const data = await getProperty(propertyId); // API populates property.units
       setProperty(data);
     } catch (error) {
       notifyError("Failed to load property details.");
@@ -68,7 +67,7 @@ export default function PropertyDetailsScreen() {
     if (!property) return;
     try {
       const updated = await toggleFeatured(property._id, property.featured);
-      setProperty(updated);
+      setProperty(updated); // Update local state for the property
       notifySuccess(
         `Property ${updated.featured ? "featured" : "unfeatured"}.`
       );
@@ -77,37 +76,8 @@ export default function PropertyDetailsScreen() {
     }
   };
 
-  const handleIncrement = async () => {
-    try {
-      const updated = await incrementUnits(property._id);
-      setProperty((prev) => ({
-        ...prev,
-        numberOfUnit: updated.numberOfUnit,
-        status: updated.status,
-      }));
-      notifySuccess("Unit added.");
-    } catch (e) {
-      notifyError("Failed to increment units.");
-    }
-  };
-
-  const handleDecrement = async () => {
-    if (property.numberOfUnit <= 0) return;
-    try {
-      const updated = await decrementUnits(property._id);
-      setProperty((prev) => ({
-        ...prev,
-        numberOfUnit: updated.numberOfUnit,
-        status: updated.status,
-      }));
-      notifySuccess("Unit removed.");
-    } catch (e) {
-      notifyError("Failed to decrement units.");
-    }
-  };
-
-  // --- *** FIX: MODIFIED DELETE HANDLER FOR WEB *** ---
   const handleDelete = async () => {
+    // ... (Keep existing handleDelete function - no changes needed)
     if (!property) return;
 
     const deleteLogic = async () => {
@@ -123,27 +93,48 @@ export default function PropertyDetailsScreen() {
 
     const alertTitle = "Delete Property";
     const alertMessage =
-      "Are you sure you want to permanently delete this property? This action cannot be undone.";
+      "Are you sure you want to permanently delete this property and all its units? This action cannot be undone."; // Updated message
 
     if (Platform.OS === "web") {
-      // Use window.confirm for web
       const confirmed = window.confirm(alertMessage);
-      if (confirmed) {
-        await deleteLogic();
-      }
+      if (confirmed) await deleteLogic();
     } else {
-      // Use Alert.alert for native
       Alert.alert(alertTitle, alertMessage, [
         { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: deleteLogic, // Call the shared logic
-        },
+        { text: "Delete", style: "destructive", onPress: deleteLogic },
       ]);
     }
   };
-  // --- *** END OF FIX *** ---
+
+  const handleDeleteUnit = async (unitId) => {
+    // ... (Keep existing handleDeleteUnit function - no changes needed)
+    if (!unitId) return;
+
+    const deleteLogic = async () => {
+      try {
+        await deleteUnit(unitId);
+        notifySuccess("Unit deleted successfully.");
+        loadProperty(); // Refresh property data
+      } catch (error) {
+        notifyError("Failed to delete unit.");
+        console.error("Delete Unit Error:", error);
+      }
+    };
+
+    const alertTitle = "Delete Unit";
+    const alertMessage =
+      "Are you sure you want to permanently delete this unit?";
+
+    if (Platform.OS === "web") {
+      const confirmed = window.confirm(alertMessage);
+      if (confirmed) await deleteLogic();
+    } else {
+      Alert.alert(alertTitle, alertMessage, [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: deleteLogic },
+      ]);
+    }
+  };
 
   if (loading) {
     return (
@@ -161,13 +152,17 @@ export default function PropertyDetailsScreen() {
         <Text style={styles.emptyText}>Property not found.</Text>
         <Pressable
           onPress={() => navigation.goBack()}
-          style={styles.backButton}
+          style={styles.backButton} // Ensure this style exists and is positioned correctly
         >
           <Ionicons name="arrow-back" size={24} color={colors.primary} />
         </Pressable>
       </View>
     );
   }
+
+  // Calculate available units count
+  const availableUnitsCount =
+    property.units?.filter((u) => u.status === "available").length || 0;
 
   return (
     <ScrollView style={styles.container}>
@@ -185,9 +180,10 @@ export default function PropertyDetailsScreen() {
             name="arrow-back"
             size={24}
             color={colors.white}
-            style={styles.backButtonIcon}
+            style={styles.backButtonIcon} // Added style for potential text shadow
           />
         </Pressable>
+        {/* --- FIX: Pass the loaded property object to EditPropertyModal --- */}
         <Pressable
           onPress={() => navigation.navigate("EditPropertyModal", { property })}
           style={styles.editButton}
@@ -196,7 +192,7 @@ export default function PropertyDetailsScreen() {
             name="pencil"
             size={20}
             color={colors.white}
-            style={styles.backButtonIcon}
+            style={styles.backButtonIcon} // Added style for potential text shadow
           />
         </Pressable>
         {property.featured && (
@@ -208,39 +204,39 @@ export default function PropertyDetailsScreen() {
 
       {/* --- Content --- */}
       <View style={styles.content}>
-        {/* --- Title & Price --- */}
+        {/* --- Building Title & Location --- */}
         <Text style={styles.title}>{property.propertyName}</Text>
         <Text style={styles.location}>
           <Ionicons name="location-sharp" size={16} color={colors.primary} />{" "}
           {property.city}, {property.province}
           {property.street && `, ${property.street}`}
         </Text>
-        <Text style={styles.price}>
-          ₱ {Number(property.price).toLocaleString()}
-        </Text>
 
-        {/* --- Status --- */}
+        {/* --- REMOVED Price (Now per unit) --- */}
+        {/* <Text style={styles.price}>...</Text> */}
+
+        {/* --- UPDATED Status (Show available count) --- */}
         <Text
           style={[
             styles.status,
             {
               color:
-                property.status === "sold"
-                  ? colors.dangerText
-                  : colors.successText,
+                availableUnitsCount > 0
+                  ? colors.successText
+                  : colors.dangerText,
               backgroundColor:
-                property.status === "sold" ? colors.dangerBg : colors.successBg,
+                availableUnitsCount > 0 ? colors.successBg : colors.dangerBg,
             },
           ]}
         >
-          {property.status === "sold"
-            ? "Sold Out"
-            : `${property.numberOfUnit || 0} Unit(s) Available`}
+          {availableUnitsCount > 0
+            ? `${availableUnitsCount} Unit(s) Available`
+            : "No Units Available"}
         </Text>
 
-        {/* --- Admin Unit Controls --- */}
+        {/* --- Admin Controls (Property Level) --- */}
         <View style={styles.adminSection}>
-          <Text style={styles.sectionTitle}>Admin Controls</Text>
+          <Text style={styles.sectionTitle}>Admin Controls (Building)</Text>
           <View style={styles.adminControls}>
             <Pressable
               style={styles.controlButton}
@@ -255,87 +251,45 @@ export default function PropertyDetailsScreen() {
                 {property.featured ? "Unfeature" : "Feature"}
               </Text>
             </Pressable>
-            <Pressable
-              style={styles.controlButton}
-              onPress={handleDecrement}
-              disabled={property.numberOfUnit <= 0}
-            >
-              <Ionicons
-                name="remove-circle"
-                size={20}
-                color={
-                  property.numberOfUnit <= 0 ? colors.gray : colors.dangerText
-                }
-              />
-              <Text
-                style={[
-                  styles.controlButtonText,
-                  property.numberOfUnit <= 0 && { color: colors.gray },
-                ]}
-              >
-                Dec Unit
-              </Text>
-            </Pressable>
-            <Pressable style={styles.controlButton} onPress={handleIncrement}>
-              <Ionicons
-                name="add-circle"
-                size={20}
-                color={colors.successText}
-              />
-              <Text style={styles.controlButtonText}>Inc Unit</Text>
-            </Pressable>
-
+            {/* REMOVED Unit Increment/Decrement Buttons */}
             <Pressable style={styles.controlButton} onPress={handleDelete}>
-              <Ionicons name="trash" size={20} color={colors.dangerText} />
+              <Ionicons name="trash" size={20} color={colors.danger} />
               <Text
-                style={[styles.controlButtonText, { color: colors.dangerText }]}
+                style={[styles.controlButtonText, { color: colors.danger }]}
               >
-                Delete
+                Delete Bldg
               </Text>
             </Pressable>
           </View>
         </View>
 
-        {/* --- Description --- */}
+        {/* --- Building Description --- */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Description</Text>
+          <Text style={styles.sectionTitle}>About {property.propertyName}</Text>
           <Text style={styles.description}>{property.description}</Text>
         </View>
 
-        {/* --- Specifications --- */}
-        {property.specifications && (
+        {/* --- REMOVED Building Specifications (Now per unit) --- */}
+        {/* {property.specifications && (...)} */}
+
+        {/* --- Building Amenities --- */}
+        {property.amenities && property.amenities.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Specifications</Text>
-            <View style={styles.specGrid}>
-              {Boolean(property.specifications.floorArea) && (
-                <SpecItem
-                  icon="home-outline"
-                  label="Floor Area"
-                  value={`${property.specifications.floorArea} sqm`}
-                />
-              )}
-              {Boolean(property.specifications.bedrooms) && (
-                <SpecItem
-                  icon="bed-outline"
-                  label="Bedrooms"
-                  value={property.specifications.bedrooms}
-                />
-              )}
-              {Boolean(property.specifications.bathrooms) && (
-                <SpecItem
-                  icon="water-outline"
-                  label="Bathrooms"
-                  value={property.specifications.bathrooms}
-                />
-              )}
+            <Text style={styles.sectionTitle}>Building Amenities</Text>
+            <View style={styles.amenitiesContainer}>
+              {property.amenities.map((amenity, index) => (
+                <Text key={index} style={styles.amenityItem}>
+                  • {amenity}
+                </Text>
+              ))}
             </View>
           </View>
         )}
 
-        {/* --- Photo Gallery --- */}
+        {/* --- Building Photo Gallery --- */}
         {property.photos && property.photos.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Photo Gallery</Text>
+            <Text style={styles.sectionTitle}>Building Photo Gallery</Text>
             <FlatList
               data={property.photos}
               horizontal
@@ -354,49 +308,129 @@ export default function PropertyDetailsScreen() {
             />
           </View>
         )}
+
+        {/* --- Units Section --- */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Units</Text>
+            <Pressable
+              style={styles.addButton}
+              onPress={() =>
+                navigation.navigate("AddUnitModal", {
+                  propertyId: property._id,
+                })
+              }
+            >
+              <Ionicons name="add-circle" size={24} color={colors.primary} />
+              <Text style={styles.addButtonText}>Add Unit</Text>
+            </Pressable>
+          </View>
+
+          {property.units && property.units.length > 0 ? (
+            property.units.map((unit) => (
+              <View key={unit._id} style={styles.unitCard}>
+                <View style={styles.unitInfo}>
+                  <Text style={styles.unitNumber}>{unit.unitNumber}</Text>
+                  <Text style={styles.unitPrice}>
+                    ₱ {Number(unit.price).toLocaleString()}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.unitStatus,
+                      { color: getStatusColor(unit.status) },
+                    ]}
+                  >
+                    {unit.status.charAt(0).toUpperCase() + unit.status.slice(1)}
+                  </Text>
+                  <Text style={styles.unitSpecs}>
+                    {unit.specifications?.bedrooms
+                      ? `${unit.specifications.bedrooms} Bed`
+                      : ""}
+                    {unit.specifications?.bathrooms
+                      ? ` • ${unit.specifications.bathrooms} Bath`
+                      : ""}
+                    {unit.specifications?.floorArea
+                      ? ` • ${unit.specifications.floorArea} sqm`
+                      : ""}
+                  </Text>
+                </View>
+                <View style={styles.unitActions}>
+                  <Pressable
+                    style={styles.unitActionButton}
+                    onPress={() =>
+                      navigation.navigate("EditUnitModal", { unit })
+                    } // Pass the unit object
+                  >
+                    <Ionicons name="pencil" size={20} color={colors.primary} />
+                  </Pressable>
+                  <Pressable
+                    style={styles.unitActionButton}
+                    onPress={() => handleDeleteUnit(unit._id)}
+                  >
+                    <Ionicons name="trash" size={20} color={colors.danger} />
+                  </Pressable>
+                </View>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.emptyText}>
+              No units added for this property yet.
+            </Text>
+          )}
+        </View>
       </View>
     </ScrollView>
   );
 }
 
-const SpecItem = ({ icon, label, value }) => (
-  <View style={styles.specItem}>
-    <Ionicons name={icon} size={28} color={colors.primary} />
-    <Text style={styles.specLabel}>{label}</Text>
-    <Text style={styles.specValue}>{value}</Text>
-  </View>
-);
+// REMOVED SpecItem Component (no longer used at property level)
+// const SpecItem = ({ icon, label, value }) => (...);
+
+const getStatusColor = (status) => {
+  switch (status) {
+    case "available":
+      return colors.success;
+    case "sold":
+      return colors.danger;
+    case "rented":
+      return colors.info;
+    default:
+      return colors.muted;
+  }
+};
 
 const styles = StyleSheet.create({
+  // ... Keep existing styles ...
   loader: { flex: 1, justifyContent: "center", alignItems: "center" },
-  emptyText: { fontSize: 16, color: colors.gray },
   container: { flex: 1, backgroundColor: colors.white },
   image: {
     width: "100%",
     height: 280,
     backgroundColor: colors.light,
-    justifyContent: "space-between",
-    flexDirection: "row",
-    paddingTop: 40,
-    paddingHorizontal: 16,
+    // Removed justifyContent/flexDirection for absolute positioning of buttons
   },
   backButton: {
+    // Keep for back navigation
     position: "absolute",
-    top: 45,
+    top: Platform.OS === "ios" ? 50 : 40, // Adjust for status bar
     left: 16,
     backgroundColor: "rgba(0,0,0,0.4)",
     borderRadius: 20,
     padding: 6,
+    zIndex: 10, // Ensure it's above image
   },
   editButton: {
+    // Keep for edit navigation
     position: "absolute",
-    top: 45,
+    top: Platform.OS === "ios" ? 50 : 40, // Adjust for status bar
     right: 16,
     backgroundColor: "rgba(0,0,0,0.4)",
     borderRadius: 20,
     padding: 6,
+    zIndex: 10, // Ensure it's above image
   },
   backButtonIcon: {
+    // Style for icons inside buttons
     textShadowColor: "rgba(0, 0, 0, 0.6)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
@@ -422,22 +456,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.textSecondary,
     marginBottom: 12,
+    flexDirection: "row", // Align icon and text
     alignItems: "center",
   },
   price: {
+    // Keep style even if element is removed, for consistency
     fontSize: 26,
     fontWeight: "bold",
     color: colors.primary,
     marginBottom: 12,
   },
   status: {
+    // Style for the new status text
     fontSize: 15,
     fontWeight: "600",
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 20,
     alignSelf: "flex-start",
-    overflow: "hidden",
+    overflow: "hidden", // Ensures background respects border radius
     marginBottom: 16,
   },
   section: {
@@ -446,27 +483,56 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     marginTop: 16,
   },
+  sectionHeader: {
+    // For Unit section header
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  addButton: {
+    // For "Add Unit" button
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primaryLight,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+  },
+  addButtonText: {
+    color: colors.primary,
+    fontWeight: "600",
+    marginLeft: 4,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "bold",
     color: colors.text,
-    marginBottom: 8,
+    marginBottom: 8, // Reduced margin for sectionHeader case
   },
   description: { fontSize: 15, color: colors.textSecondary, lineHeight: 22 },
-  specGrid: {
+  amenitiesContainer: {
+    // Style for amenities list
     flexDirection: "row",
-    justifyContent: "space-around",
-    marginTop: 8,
+    flexWrap: "wrap",
+    marginTop: 4,
   },
-  specItem: { alignItems: "center", padding: 10, minWidth: 100 },
-  specLabel: { fontSize: 13, color: colors.textSecondary, marginTop: 4 },
-  specValue: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: colors.text,
-    marginTop: 2,
+  amenityItem: {
+    backgroundColor: colors.light,
+    color: colors.textSecondary,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 15,
+    marginRight: 8,
+    marginBottom: 8,
+    fontSize: 13,
   },
+  // specGrid removed (was for property specs)
+  // specItem removed
+  // specLabel removed
+  // specValue removed
   galleryImage: {
+    // Keep for property gallery
     height: 120,
     borderRadius: 8,
     marginRight: 10,
@@ -477,6 +543,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     marginTop: 8,
+    marginBottom: 16, // Added margin bottom
   },
   adminControls: {
     flexDirection: "row",
@@ -484,11 +551,64 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 8,
   },
-  controlButton: { alignItems: "center", padding: 8, flex: 1 },
+  controlButton: { alignItems: "center", padding: 8, flex: 1 }, // Keep for feature/delete
   controlButtonText: {
     color: colors.text,
     fontWeight: "600",
     marginTop: 4,
     fontSize: 13,
+  },
+  // --- Unit Styles ---
+  unitCard: {
+    backgroundColor: colors.white,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  unitInfo: {
+    flex: 1,
+    marginRight: 10,
+  },
+  unitNumber: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: colors.text,
+  },
+  unitPrice: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.primary,
+    marginTop: 4,
+  },
+  unitStatus: {
+    fontSize: 14,
+    fontWeight: "bold",
+    marginTop: 4,
+    textTransform: "capitalize",
+  },
+  unitSpecs: {
+    fontSize: 12,
+    color: colors.muted,
+    marginTop: 6,
+  },
+  unitActions: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  unitActionButton: {
+    padding: 8,
+    marginLeft: 8,
+  },
+  emptyText: {
+    // Reusable style
+    textAlign: "center",
+    marginTop: 20,
+    fontSize: 14,
+    color: colors.muted,
   },
 });

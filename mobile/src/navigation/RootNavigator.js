@@ -1,3 +1,5 @@
+import AddUnitModal from "../screens/modals/AddUnitModal"; // <-- Add Import
+import EditUnitModal from "../screens/modals/EditUnitModal"; // <-- Add Import
 import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -38,7 +40,9 @@ function CustomDrawerContent(props) {
       <View style={styles.drawerHeader}>
         <Text style={styles.drawerTitle}>GIEWELLZON</Text>
         {user && (
-          <Text style={styles.drawerSubtitle}>{user.email || user.username}</Text>
+          <Text style={styles.drawerSubtitle}>
+            {user.email || user.username}
+          </Text>
         )}
       </View>
       <DrawerItemList {...props} />
@@ -75,11 +79,31 @@ function DrawerNavigator() {
         },
       }}
     >
-      <Drawer.Screen name="Overview" component={OverviewScreen} options={{ title: "📊 Overview" }}/>
-      <Drawer.Screen name="Properties" component={PropertiesScreen} options={{ title: "🏠 Properties" }}/>
-      <Drawer.Screen name="Sales" component={SalesScreen} options={{ title: "💼 Sales" }}/>
-      <Drawer.Screen name="Inquiries" component={InquiriesScreen} options={{ title: "📥 Inquiries" }}/>
-      <Drawer.Screen name="Profile" component={ProfileScreen} options={{ title: "👤 Profile" }}/>
+      <Drawer.Screen
+        name="Overview"
+        component={OverviewScreen}
+        options={{ title: "📊 Overview" }}
+      />
+      <Drawer.Screen
+        name="Properties"
+        component={PropertiesScreen}
+        options={{ title: "🏠 Properties" }}
+      />
+      <Drawer.Screen
+        name="Sales"
+        component={SalesScreen}
+        options={{ title: "💼 Sales" }}
+      />
+      <Drawer.Screen
+        name="Inquiries"
+        component={InquiriesScreen}
+        options={{ title: "📥 Inquiries" }}
+      />
+      <Drawer.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{ title: "👤 Profile" }}
+      />
       {/* Logout is now handled in CustomDrawerContent */}
     </Drawer.Navigator>
   );
@@ -109,6 +133,7 @@ export default function RootNavigator() {
               component={PropertyDetailsScreen}
               options={{ animation: "slide_from_right" }}
             />
+            {/* --- MODAL GROUP --- */}
             <Stack.Group screenOptions={{ presentation: "modal" }}>
               <Stack.Screen
                 name="AddPropertyModal"
@@ -120,6 +145,11 @@ export default function RootNavigator() {
               />
               <Stack.Screen name="AddSaleModal" component={AddSaleModal} />
               <Stack.Screen name="EditSaleModal" component={EditSaleModal} />
+
+              {/* --- ADD THESE TWO LINES --- */}
+              <Stack.Screen name="AddUnitModal" component={AddUnitModal} />
+              <Stack.Screen name="EditUnitModal" component={EditUnitModal} />
+              {/* --------------------------- */}
             </Stack.Group>
           </>
         ) : (
