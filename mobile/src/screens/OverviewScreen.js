@@ -1,64 +1,233 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
   ActivityIndicator,
-  Image,
   Pressable,
   RefreshControl,
   Platform,
+  Dimensions,
+  ImageBackground,
+  Animated,
+  Image,
 } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
 import { getDashboardAnalytics } from "../api/analytics";
 import { getFeaturedProperties } from "../api/properties";
+import { getRecentSales } from "../api/sales";
+import { getRecentInquiries } from "../api/inquiries";
 import { toAbsoluteUrl } from "../api/client";
 import Header from "../components/Header";
 import { colors } from "../theme/colors";
 import { notifyError } from "../utils/notify";
 import { Ionicons } from "@expo/vector-icons";
 
-// StatCard Component
-const StatCard = ({ title, value, icon, color }) => (
-  <View style={styles.statCard}>
-    <View style={[styles.statIcon, { backgroundColor: color }]}>
+const { width: screenWidth } = Dimensions.get("window");
+const cardWidth = screenWidth * 0.75;
+
+const StatCard = ({ title, value, icon, color, style }) => (
+  <Animated.View style={[styles.statCard, { borderLeftColor: color }, style]}>
+    <View style={[styles.statIconContainer, { backgroundColor: color }]}>
       <Ionicons name={icon} size={24} color="#fff" />
     </View>
-    <View>
+    <View style={styles.statInfo}>
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statTitle}>{title}</Text>
     </View>
-  </View>
+  </Animated.View>
 );
+
+// --- 🎨 QuickLinkCard Redesigned ---
+const QuickLinkCard = ({ title, icon, onPress, color, bgColor }) => {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.quickLinkCard,
+        {
+          backgroundColor: bgColor,
+          borderColor: color,
+          transform: [{ scale: pressed ? 0.96 : 1 }],
+        },
+      ]}
+      onPress={onPress}
+    >
+      <Ionicons name={icon} size={30} color={color} />
+      <Text style={[styles.quickLinkTitle, { color: color }]}>{title}</Text>
+    </Pressable>
+  );
+};
+
+const PropertyCard = ({ item, navigation }) => (
+  <Pressable
+    style={styles.propertyCard}
+    onPress={() =>
+      navigation.navigate("PropertyDetails", { propertyId: item._id })
+    }
+  >
+    <ImageBackground
+      source={{
+        uri: toAbsoluteUrl(
+          item.thumbnail ||
+            item.photos?.[0] ||
+            "https://placehold.co/600x400?text=No+Image"
+        ),
+      }}
+      style={styles.propertyCardImage}
+      imageStyle={{ borderRadius: 16 }}
+      {...(Platform.OS === "web" && { referrerPolicy: "no-referrer" })}
+    >
+      <LinearGradient
+        colors={["transparent", "rgba(0,0,0,0.8)"]}
+        style={styles.propertyCardOverlay}
+      >
+        <Text style={styles.propertyCardTitle} numberOfLines={1}>
+          {item.propertyName}
+        </Text>
+        <Text style={styles.propertyCardLocation} numberOfLines={1}>
+          {item.city}, {item.province}
+        </Text>
+      </LinearGradient>
+    </ImageBackground>
+  </Pressable>
+);
+
+const SaleCard = ({ item }) => (
+  <Pressable style={styles.saleCard}>
+    <Image
+      source={{
+        uri: toAbsoluteUrl(
+          item.property?.thumbnail || "https://placehold.co/100x100?text=Img"
+        ),
+      }}
+      style={styles.saleCardImage}
+    />
+    <View style={styles.saleCardInfo}>
+      <Text style={styles.saleCardProperty} numberOfLines={1}>
+        {item.property?.propertyName || "Property Name"}
+      </Text>
+      <Text style={styles.saleCardBuyer} numberOfLines={1}>
+        Sold to {item.buyerName || "Buyer"}
+      </Text>
+      <Text style={styles.saleCardAmount}>
+        ₱{(item.amount || 0).toLocaleString()}
+      </Text>
+    </View>
+    <Text style={styles.saleCardDate}>
+      {item.date ? new Date(item.date).toLocaleDateString() : "No date"}
+    </Text>
+  </Pressable>
+);
+
+const InquiryCard = ({ item, navigation }) => {
+  const statusColor =
+    item.status === "Pending"
+      ? colors.danger
+      : item.status === "Handled"
+      ? colors.success
+      : colors.gray;
+
+  return (
+    <Pressable
+      style={styles.inquiryCard}
+      onPress={() => navigation.navigate("Inquiries")}
+    >
+      <View style={styles.inquiryAvatar}>
+        <Ionicons name="person-circle-outline" size={44} color={colors.gray} />
+      </View>
+      <View style={styles.inquiryInfo}>
+        <View style={styles.inquiryHeader}>
+          <Text style={styles.inquiryName} numberOfLines={1}>
+            {item.inquirerName || "Inquirer Name"}
+          </Text>
+          <Text style={[styles.inquiryStatus, { color: statusColor }]}>
+            {item.status || "No Status"}
+          </Text>
+        </View>
+        <Text style={styles.inquiryMessage} numberOfLines={2}>
+          {item.message || "No message preview"}
+        </Text>
+        <Text style={styles.inquiryProperty} numberOfLines={1}>
+          Re: {item.property?.propertyName || "Property"}
+        </Text>
+      </View>
+      <Text style={styles.inquiryTimestamp}>
+        {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "No date"}
+      </Text>
+    </Pressable>
+  );
+};
 
 export default function OverviewScreen() {
   const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
   const [featured, setFeatured] = useState([]);
+  const [recentSales, setRecentSales] = useState([]);
+  const [recentInquiries, setRecentInquiries] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
 
+  const fadeAnim1 = useRef(new Animated.Value(0)).current;
+  const fadeAnim2 = useRef(new Animated.Value(0)).current;
+  const fadeAnim3 = useRef(new Animated.Value(0)).current;
+  const fadeAnim4 = useRef(new Animated.Value(0)).current;
+  const fadeAnim5 = useRef(new Animated.Value(0)).current;
+
+  const fadeIn = () => {
+    Animated.stagger(150, [
+      Animated.timing(fadeAnim1, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim2, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim3, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim4, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim5, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
   const loadData = useCallback(async () => {
-    // Keep loading true if not refreshing to avoid flicker on initial load
     if (!refreshing) {
       setLoading(true);
     }
     try {
-      const [statsData, featuredData] = await Promise.all([
-        getDashboardAnalytics(),
-        // Assuming getFeaturedProperties returns an array directly now
-        getFeaturedProperties(5),
-      ]);
+      const [statsData, featuredData, salesData, inquiriesData] =
+        await Promise.all([
+          getDashboardAnalytics(),
+          getFeaturedProperties(5),
+          getRecentSales(5),
+          getRecentInquiries(5),
+        ]);
       setStats(statsData);
-      setFeatured(featuredData || []); // Use featuredData directly
+      setFeatured(featuredData || []);
+      setRecentSales(salesData || []);
+      setRecentInquiries(inquiriesData || []);
+      fadeIn();
     } catch (error) {
       notifyError("Failed to load dashboard data.");
-      console.error("Load Dashboard Error:", error.response?.data || error);
     } finally {
       setLoading(false);
     }
-  }, [refreshing]); // Depend on refreshing state
+  }, [refreshing, fadeAnim1, fadeAnim2, fadeAnim3, fadeAnim4, fadeAnim5]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -85,7 +254,7 @@ export default function OverviewScreen() {
           />
         }
       >
-        {loading && !refreshing ? ( // Show loader only on initial load
+        {loading && !refreshing ? (
           <ActivityIndicator
             size="large"
             color={colors.primary}
@@ -93,78 +262,162 @@ export default function OverviewScreen() {
           />
         ) : (
           <>
-            {/* Stats Grid */}
-            <View style={styles.statsGrid}>
-              {/* --- FIX: Use correct fields from analyticsController --- */}
-              <StatCard
-                title="Total Buildings" // Changed label
-                value={stats?.buildingCount || 0} // Was totalProperties
-                icon="business" // Changed icon
-                color={colors.primary}
-              />
-              <StatCard
-                title="Total Revenue" // Changed label slightly
-                value={`₱${(stats?.totalClosedRevenue || 0).toLocaleString()}`} // Was totalSalesValue
-                icon="cash"
-                color={colors.success}
-              />
-              <StatCard
-                title="Units Sold" // Changed label
-                value={stats?.soldUnits || 0} // Was propertiesSold
-                icon="flag"
-                color={colors.warning}
-              />
-              <StatCard
-                title="Pending Inquiries"
-                value={stats?.pendingInquiries || 0} // This was correct
-                icon="chatbox-ellipses"
-                color={colors.danger}
-              />
-            </View>
+            <Animated.View style={[styles.section, { opacity: fadeAnim1 }]}>
+              <Text style={styles.sectionTitle}>Overview</Text>
+              <View style={styles.statsGrid}>
+                <StatCard
+                  title="Total Properties"
+                  value={stats?.buildingCount || 0}
+                  icon="business-outline"
+                  color={colors.primary}
+                />
+                <StatCard
+                  title="Pending Inquiries"
+                  value={stats?.pendingInquiries || 0}
+                  icon="chatbubbles-outline"
+                  color={colors.danger}
+                />
+                <StatCard
+                  title="Total Revenue"
+                  value={`₱${(stats?.totalClosedRevenue || 0).toLocaleString()}`}
+                  icon="cash-outline"
+                  color={colors.success}
+                />
+                <StatCard
+                  title="Units Sold"
+                  value={stats?.soldUnits || 0}
+                  icon="flag-outline"
+                  color={colors.warning}
+                />
+              </View>
+              <Text style={styles.sectionCaption}>
+                Overview of your latest activity.
+              </Text>
+            </Animated.View>
 
-            {/* Featured Properties */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Featured Properties</Text>
+            <Animated.View style={[styles.section, { opacity: fadeAnim2 }]}>
+              <Text style={styles.sectionTitle}>Quick Links</Text>
+              <View style={styles.quickLinksGrid}>
+                {/* --- 🎨 QuickLinkCards Updated --- */}
+                <QuickLinkCard
+                  title="Properties"
+                  icon="home-outline"
+                  onPress={() => navigation.navigate("Properties")}
+                  color={colors.primary}
+                  bgColor={"rgba(0, 105, 92, 0.08)"}
+                />
+                <QuickLinkCard
+                  title="Inquiries"
+                  icon="mail-open-outline"
+                  onPress={() => navigation.navigate("Inquiries")}
+                  color={colors.danger}
+                  bgColor={"rgba(220, 53, 69, 0.08)"}
+                />
+                <QuickLinkCard
+                  title="Sales"
+                  icon="trending-up-outline"
+                  onPress={() => navigation.navigate("Sales")}
+                  color={colors.success}
+                  bgColor={"rgba(25, 135, 84, 0.08)"}
+                />
+              </View>
+            </Animated.View>
+
+            {/* --- 🎨 Featured Properties Spacing Fixed --- */}
+            <Animated.View style={[{ opacity: fadeAnim3, marginBottom: 24 }]}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Featured Properties</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Your highlighted listings this week.
+                </Text>
+              </View>
+
               {featured.length === 0 ? (
-                <Text style={styles.emptyText}>No featured properties.</Text>
-              ) : (
-                featured.map((item) => (
-                  <Pressable
-                    key={item._id}
-                    style={styles.card}
-                    onPress={() =>
-                      navigation.navigate("PropertyDetails", {
-                        propertyId: item._id,
-                      })
-                    }
-                  >
-                    <Image
-                      source={{
-                        uri: toAbsoluteUrl(
-                          // --- FIX: Read image as a direct string ---
-                          item.thumbnail || // Was item.thumbnail?.url
-                            item.photos?.[0] || // Was item.photos?.[0]?.url
-                            "https://placehold.co/600x400?text=No+Image"
-                        ),
-                      }}
-                      style={styles.cardImage}
-                      {...(Platform.OS === "web" && {
-                        referrerPolicy: "no-referrer",
-                      })}
+                <View style={{ paddingHorizontal: 20 }}>
+                  <View style={styles.emptyContainer}>
+                    <Ionicons
+                      name="image-outline"
+                      size={60}
+                      color={colors.gray}
                     />
-                    <View style={styles.cardContent}>
-                      {/* --- FIX: Field name was already correct --- */}
-                      <Text style={styles.cardTitle} numberOfLines={1}>
-                        {item.propertyName}
-                      </Text>
-                      <Text style={styles.cardLocation} numberOfLines={1}>
-                        {item.city}, {item.province}
-                      </Text>
-                    </View>
-                  </Pressable>
+                    <Text style={styles.emptyTitle}>
+                      No featured properties yet.
+                    </Text>
+                    <Text style={styles.emptyText}>
+                      Upload one to attract more buyers!
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.carouselContainer}
+                  decelerationRate="fast"
+                  snapToInterval={cardWidth + 12}
+                  snapToAlignment="start"
+                >
+                  {featured.map((item) => (
+                    <PropertyCard
+                      key={item._id}
+                      item={item}
+                      navigation={navigation}
+                    />
+                  ))}
+                </ScrollView>
+              )}
+            </Animated.View>
+
+            <Animated.View style={[styles.section, { opacity: fadeAnim4 }]}>
+              <Text style={styles.sectionTitle}>Recent Sales</Text>
+              <Text style={styles.sectionSubtitle}>
+                A glimpse of your latest closed deals.
+              </Text>
+              {recentSales.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                  <Ionicons
+                    name="cash-outline"
+                    size={60}
+                    color={colors.gray}
+                  />
+                  <Text style={styles.emptyTitle}>No recent sales yet.</Text>
+                  <Text style={styles.emptyText}>
+                    Start recording your transactions!
+                  </Text>
+                </View>
+              ) : (
+                recentSales.map((item) => (
+                  <SaleCard key={item._id} item={item} />
                 ))
               )}
-            </View>
+            </Animated.View>
+
+            <Animated.View style={[styles.section, { opacity: fadeAnim5 }]}>
+              <Text style={styles.sectionTitle}>Recent Inquiries</Text>
+              <Text style={styles.sectionSubtitle}>
+                Stay updated with the latest customer interests.
+              </Text>
+              {recentInquiries.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                  <Ionicons
+                    name="chatbubbles-outline"
+                    size={60}
+                    color={colors.gray}
+                  />
+                  <Text style={styles.emptyTitle}>
+                    No new inquiries at the moment.
+                  </Text>
+                </View>
+              ) : (
+                recentInquiries.map((item) => (
+                  <InquiryCard
+                    key={item._id}
+                    item={item}
+                    navigation={navigation}
+                  />
+                ))
+              )}
+            </Animated.View>
           </>
         )}
       </ScrollView>
@@ -172,100 +425,108 @@ export default function OverviewScreen() {
   );
 }
 
-// Styles (No changes needed below this line)
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.light },
-  scrollContent: { padding: 16 },
+  // 🎨 Added more vertical padding
+  scrollContent: { paddingVertical: 24, paddingBottom: 100 },
   loader: { marginTop: 50 },
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-  },
+  section: { marginBottom: 24, paddingHorizontal: 20 },
+  // 🎨 This View provides padding for titles *outside* the carousel
+  sectionHeader: { paddingHorizontal: 20 },
+  // 🎨 Adjusted title/subtitle spacing
+  sectionTitle: { fontSize: 20, fontWeight: "bold", color: colors.text, marginBottom: 8 },
+  sectionSubtitle: { fontSize: 14, color: colors.textSecondary, marginBottom: 16, marginTop: -4 },
+  sectionCaption: { fontSize: 13, color: colors.textSecondary, textAlign: "center", marginTop: 8 },
+  statsGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
   statCard: {
     backgroundColor: colors.white,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     flexDirection: "row",
     alignItems: "center",
-    width: "48.5%", // Slightly less than 50% for margin
+    width: "48.5%",
     marginBottom: 12,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+    borderLeftWidth: 5,
   },
-  statIcon: {
+  statIconContainer: {
     width: 44,
     height: 44,
     borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: colors.text,
-  },
-  statTitle: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  section: {
-    marginTop: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: colors.text,
-    marginBottom: 12,
-  },
-  emptyText: {
-    textAlign: "center",
-    color: colors.gray,
-    fontSize: 14,
-    marginTop: 10,
-  },
-  card: {
-    backgroundColor: colors.white,
-    borderRadius: 12,
-    marginBottom: 16,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
     shadowRadius: 3,
-    elevation: 2,
-    overflow: "hidden",
-    flexDirection: "row",
   },
-  cardImage: {
-    width: 100,
-    height: "100%", // Changed for consistent height
-    minHeight: 100, // Ensure minimum height
+  statInfo: { flexShrink: 1 },
+  statValue: { fontSize: 18, fontWeight: "bold", color: colors.text, flexShrink: 1 },
+  statTitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2, flexShrink: 1 },
+  quickLinksGrid: { flexDirection: "row", justifyContent: "space-between" },
+  // 🎨 QuickLinkCard styles updated
+  quickLinkCard: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 20, // More padding
+    alignItems: "center",
+    marginHorizontal: 6, // More spacing
+    borderWidth: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  quickLinkTitle: { 
+    fontSize: 14, 
+    fontWeight: "600", 
+    marginTop: 10, // More spacing
+  },
+  emptyContainer: { alignItems: "center", paddingVertical: 40, backgroundColor: colors.white, borderRadius: 16, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5, },
+  emptyTitle: { fontSize: 16, fontWeight: "600", color: colors.text, marginTop: 12 },
+  emptyText: { fontSize: 13, color: colors.textSecondary, marginTop: 4, textAlign: "center", paddingHorizontal: 20 },
+  // 🎨 Carousel container now starts from the edge
+  carouselContainer: { paddingVertical: 8, paddingHorizontal: 20 },
+  propertyCard: {
+    width: cardWidth,
+    height: 220,
+    borderRadius: 16,
+    marginHorizontal: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
     backgroundColor: colors.border,
   },
-  cardContent: {
-    padding: 16,
-    flex: 1,
-    justifyContent: "center", // Center content vertically
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: colors.text,
-    marginBottom: 4,
-  },
-  cardLocation: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginBottom: 8,
-  },
-  cardPrice: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: colors.primary,
-  },
+  propertyCardImage: { width: "100%", height: "100%", justifyContent: "flex-end" },
+  propertyCardOverlay: { padding: 12, borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
+  propertyCardTitle: { fontSize: 15, fontWeight: "bold", color: colors.white, marginBottom: 2 },
+  propertyCardLocation: { fontSize: 12, color: "rgba(255, 255, 255, 0.8)" },
+
+  // Sales Card Styles
+  saleCard: { flexDirection: "row", alignItems: "center", backgroundColor: colors.white, borderRadius: 12, padding: 12, marginBottom: 12, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 5, elevation: 2, },
+  saleCardImage: { width: 50, height: 50, borderRadius: 8, marginRight: 12, backgroundColor: colors.border },
+  saleCardInfo: { flex: 1, marginRight: 8 },
+  saleCardProperty: { fontSize: 15, fontWeight: "bold", color: colors.text },
+  saleCardBuyer: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
+  saleCardAmount: { fontSize: 14, fontWeight: "600", color: colors.success, marginTop: 2 },
+  saleCardDate: { fontSize: 12, color: colors.textSecondary, marginLeft: "auto", alignSelf: "flex-start" },
+
+  // Inquiry Card Styles
+  inquiryCard: { flexDirection: "row", alignItems: "flex-start", backgroundColor: colors.white, borderRadius: 12, padding: 12, marginBottom: 12, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 5, elevation: 2, },
+  inquiryAvatar: { width: 44, height: 44, borderRadius: 22, justifyContent: "center", alignItems: "center", marginRight: 12, backgroundColor: colors.light },
+  inquiryInfo: { flex: 1, marginRight: 8 },
+  inquiryHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 2 },
+  inquiryName: { fontSize: 15, fontWeight: "bold", color: colors.text, flexShrink: 1 },
+  inquiryStatus: { fontSize: 12, fontWeight: "600", marginLeft: 8, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, overflow: "hidden" },
+  inquiryMessage: { fontSize: 13, color: colors.textSecondary, marginTop: 2, lineHeight: 18 },
+  inquiryProperty: { fontSize: 12, color: colors.primary, fontStyle: "italic", marginTop: 4 },
+  inquiryTimestamp: { fontSize: 12, color: colors.textSecondary, marginLeft: "auto", alignSelf: "flex-start" },
 });

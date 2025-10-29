@@ -1,5 +1,5 @@
-import AddUnitModal from "../screens/modals/AddUnitModal"; // <-- Add Import
-import EditUnitModal from "../screens/modals/EditUnitModal"; // <-- Add Import
+import AddUnitModal from "../screens/modals/AddUnitModal";
+import EditUnitModal from "../screens/modals/EditUnitModal";
 import UnitDetailsScreen from "../screens/UnitDetailsScreen";
 import PhotoViewerScreen from "../screens/PhotoViewerScreen";
 import React from "react";
@@ -12,8 +12,17 @@ import {
   DrawerItem,
 } from "@react-navigation/drawer";
 import { useAuth } from "../providers/AuthProvider";
-import { colors } from "../theme/colors"; // Import colors
-import { ActivityIndicator, View, Text, StyleSheet } from "react-native"; // For loading state and custom content
+import { colors } from "../theme/colors";
+import { ActivityIndicator, View, Text, StyleSheet } from "react-native";
+
+import {
+  BarChart3,
+  Home,
+  Briefcase,
+  Inbox,
+  User,
+  LogOut,
+} from "lucide-react-native";
 
 // Screens
 import LoginScreen from "../screens/LoginScreen";
@@ -33,85 +42,133 @@ import EditSaleModal from "../screens/modals/EditSaleModal";
 const Stack = createNativeStackNavigator();
 const Drawer = createDrawerNavigator();
 
-// --- Custom Drawer Content ---
 function CustomDrawerContent(props) {
-  const { user, logout } = useAuth(); // Get user and logout from context
+  const { user, logout } = useAuth();
+  
+  const logoutColor = "#E74C3C"; 
 
   return (
-    <DrawerContentScrollView {...props} style={styles.drawerScrollView}>
-      <View style={styles.drawerHeader}>
-        <Text style={styles.drawerTitle}>GIEWELLZON</Text>
-        {user && (
-          <Text style={styles.drawerSubtitle}>
-            {user.email || user.username}
-          </Text>
-        )}
+    <View style={styles.container}>
+      <DrawerContentScrollView {...props}>
+        <View style={styles.profileHeader}>
+          <View style={styles.avatarPlaceholder}>
+            <User color={colors.primary} size={30} />
+          </View>
+          <View style={styles.profileInfo}>
+            <Text style={styles.profileName}>
+              {user?.email.split("@")[0] || "Giewellzon User"}
+            </Text>
+            <Text style={styles.profileEmail}>
+              {user?.email || "Welcome"}
+            </Text>
+          </View>
+        </View>
+
+        <DrawerItemList {...props} />
+
+        <View style={styles.logoutSection}>
+          <DrawerItem
+            label="Logout"
+            onPress={logout}
+            labelStyle={[styles.drawerLabel, { color: logoutColor }]}
+            icon={() => <LogOut color={logoutColor} size={20} />}
+          />
+        </View>
+      </DrawerContentScrollView>
+
+      <View style={styles.brandedFooter}>
+        <Text style={styles.brandedFooterText}>© Giewellzon Realty</Text>
+        <Text style={styles.brandedFooterText}>All rights reserved.</Text>
       </View>
-      <DrawerItemList {...props} />
-      <View style={styles.drawerFooter}>
-        <DrawerItem
-          label="Logout"
-          onPress={logout} // Directly call logout from AuthContext
-          labelStyle={styles.logoutLabel}
-          style={styles.logoutItem}
-        />
-      </View>
-    </DrawerContentScrollView>
+    </View>
   );
 }
 
-// --- Drawer Screens ---
 function DrawerNavigator() {
+  const renderDrawerLabel = (label, focused, color) => (
+    <Text
+      style={[
+        styles.drawerLabel,
+        { color, fontWeight: focused ? "600" : "400" },
+      ]}
+    >
+      {label}
+    </Text>
+  );
+
   return (
     <Drawer.Navigator
       initialRouteName="Overview"
-      drawerContent={(props) => <CustomDrawerContent {...props} />} // Use custom content component
+      drawerContent={(props) => <CustomDrawerContent {...props} />}
       screenOptions={{
-        headerShown: false, // Screens manage their own header
-        drawerActiveTintColor: colors.primary,
-        drawerInactiveTintColor: colors.textSecondary,
-        drawerLabelStyle: {
-          // Keep this minimal, rely on CustomDrawerContent for styling if needed
-          fontSize: 14,
-          marginLeft: -16, // Adjust to align text properly
-        },
+        headerShown: false,
+        drawerActiveTintColor: colors.white,
+        drawerInactiveTintColor: "rgba(255, 255, 255, 0.7)",
+        drawerActiveBackgroundColor: "rgba(255, 255, 255, 0.15)",
         drawerStyle: {
-          backgroundColor: colors.white,
-          width: 240,
+          backgroundColor: colors.primary,
+          width: 280, 
+          borderTopRightRadius: 20,
+          borderBottomRightRadius: 20,
+        },
+        drawerItemStyle: {
+          borderRadius: 12,
+          marginHorizontal: 15,
+        },
+        drawerLabelStyle: {
+          marginLeft: -10,
         },
       }}
     >
       <Drawer.Screen
         name="Overview"
         component={OverviewScreen}
-        options={{ title: "📊 Overview" }}
+        options={{
+          drawerLabel: ({ focused, color }) =>
+            renderDrawerLabel("Overview", focused, color),
+          drawerIcon: ({ color }) => <BarChart3 color={color} size={20} />,
+        }}
       />
       <Drawer.Screen
         name="Properties"
         component={PropertiesScreen}
-        options={{ title: "🏠 Properties" }}
+        options={{
+          drawerLabel: ({ focused, color }) =>
+            renderDrawerLabel("Properties", focused, color),
+          drawerIcon: ({ color }) => <Home color={color} size={20} />,
+        }}
       />
       <Drawer.Screen
         name="Sales"
         component={SalesScreen}
-        options={{ title: "💼 Sales" }}
+        options={{
+          drawerLabel: ({ focused, color }) =>
+            renderDrawerLabel("Sales", focused, color),
+          drawerIcon: ({ color }) => <Briefcase color={color} size={20} />,
+        }}
       />
       <Drawer.Screen
         name="Inquiries"
         component={InquiriesScreen}
-        options={{ title: "📥 Inquiries" }}
+        options={{
+          drawerLabel: ({ focused, color }) =>
+            renderDrawerLabel("Inquiries", focused, color),
+          drawerIcon: ({ color }) => <Inbox color={color} size={20} />,
+        }}
       />
       <Drawer.Screen
         name="Profile"
         component={ProfileScreen}
-        options={{ title: "👤 Profile" }}
+        options={{
+          drawerLabel: ({ focused, color }) =>
+            renderDrawerLabel("Profile", focused, color),
+          drawerIcon: ({ color }) => <User color={color} size={20} />,
+        }}
       />
-      {/* Logout is now handled in CustomDrawerContent */}
     </Drawer.Navigator>
   );
 }
 
-// --- Main Stack Navigator (Handles Auth State) ---
 export default function RootNavigator() {
   const { user, loading } = useAuth();
 
@@ -127,7 +184,6 @@ export default function RootNavigator() {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {user ? (
-          // --- Authenticated Stack ---
           <>
             <Stack.Screen name="MainDrawer" component={DrawerNavigator} />
             <Stack.Screen
@@ -142,16 +198,12 @@ export default function RootNavigator() {
             />
             <Stack.Screen
               name="PhotoViewerScreen"
-              // You MUST import and provide the component here
-              // e.g., component={PhotoViewerScreen}
-              // If you're using my conceptual PhotoViewerScreen.js
               component={PhotoViewerScreen}
               options={{
                 headerShown: false,
-                presentation: "fullScreenModal", // Use fullScreenModal for a cleaner look
+                presentation: "fullScreenModal",
               }}
             />
-            {/* --- MODAL GROUP --- */}
             <Stack.Group screenOptions={{ presentation: "modal" }}>
               <Stack.Screen
                 name="AddPropertyModal"
@@ -163,15 +215,11 @@ export default function RootNavigator() {
               />
               <Stack.Screen name="AddSaleModal" component={AddSaleModal} />
               <Stack.Screen name="EditSaleModal" component={EditSaleModal} />
-
-              {/* --- ADD THESE TWO LINES --- */}
               <Stack.Screen name="AddUnitModal" component={AddUnitModal} />
               <Stack.Screen name="EditUnitModal" component={EditUnitModal} />
-              {/* --------------------------- */}
             </Stack.Group>
           </>
         ) : (
-          // --- Unauthenticated Stack ---
           <Stack.Screen name="Login" component={LoginScreen} />
         )}
       </Stack.Navigator>
@@ -179,7 +227,6 @@ export default function RootNavigator() {
   );
 }
 
-// --- Styles ---
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
@@ -187,35 +234,60 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: colors.light,
   },
-  drawerScrollView: {
+  container: {
     flex: 1,
+    backgroundColor: colors.primary, 
   },
-  drawerHeader: {
-    backgroundColor: colors.primary,
+  profileHeader: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 20,
-    paddingVertical: 20,
+    paddingVertical: 30,
     marginBottom: 10,
   },
-  drawerTitle: {
+  avatarPlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.white,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 15,
+  },
+  profileInfo: {
+    flex: 1,
+  },
+  profileName: {
     color: colors.white,
     fontSize: 18,
     fontWeight: "bold",
   },
-  drawerSubtitle: {
-    color: colors.light,
-    fontSize: 12,
-    marginTop: 4,
+  profileEmail: {
+    color: "rgba(255, 255, 255, 0.8)",
+    fontSize: 13,
   },
-  drawerFooter: {
+  logoutSection: {
     borderTopWidth: 1,
-    borderTopColor: colors.border,
-    marginTop: 20, // Add some space above the logout
+    borderTopColor: "rgba(255, 255, 255, 0.15)",
+    marginTop: 20,
+    marginHorizontal: 15, 
+    paddingTop: 10, 
   },
-  logoutItem: {
-    // Optional: Additional styling for the logout item container
+  drawerLabel: {
+    fontSize: 15, 
+    fontWeight: "500",
   },
-  logoutLabel: {
-    color: colors.secondary, // Use secondary color for logout
-    fontWeight: "bold",
+  brandedFooter: {
+    backgroundColor: "rgba(0, 0, 0, 0.2)", 
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255, 255, 255, 0.15)", 
+  },
+  brandedFooterText: {
+    color: "rgba(255, 255, 255, 0.7)",
+    fontSize: 11,
+    textAlign: "center",
+    lineHeight: 16,
   },
 });

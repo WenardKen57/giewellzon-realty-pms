@@ -1,43 +1,76 @@
-import React, { useEffect, useState, useCallback } from "react"; // Added useCallback
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
   ScrollView,
   Pressable,
   Alert,
-  StyleSheet, // Added StyleSheet
-  Platform, // Added Platform
-  RefreshControl, // Added RefreshControl
-  ActivityIndicator, // Added ActivityIndicator
+  StyleSheet,
+  Platform,
+  RefreshControl,
+  ActivityIndicator,
 } from "react-native";
-import { useFocusEffect, useNavigation } from "@react-navigation/native"; // Added useNavigation and useFocusEffect
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons"; // --- ADDED ---
+import { LinearGradient } from "expo-linear-gradient"; // --- ADDED ---
 import Header from "../components/Header";
 import { colors } from "../theme/colors";
 import FAB from "../components/FAB";
 import { listSales, deleteSale } from "../api/sales";
-// Removed modal imports as they are handled differently now
-// import AddSaleModal from "./modals/AddSaleModal";
-// import EditSaleModal from "./modals/EditSaleModal";
-import { notifySuccess, notifyError } from "../utils/notify"; // Added notifications
+import { notifySuccess, notifyError } from "../utils/notify";
+
+// --- NEW: Helper to get status badge styles ---
+const getStatusStyles = (status) => {
+  switch (status) {
+    case "closed":
+      return {
+        backgroundColor: "rgba(40, 167, 69, 0.1)", // Light green
+        color: colors.successText, // Dark green
+      };
+    case "cancelled":
+      return {
+        backgroundColor: "rgba(220, 53, 69, 0.1)", // Light red
+        color: colors.dangerText, // Dark red
+      };
+    case "pending":
+    default:
+      return {
+        backgroundColor: "rgba(255, 193, 7, 0.1)", // Light orange
+        color: colors.warningText, // Dark orange
+      };
+  }
+};
+
+// --- NEW: Filter options ---
+const filterOptions = [
+  { label: "All", value: "all" },
+  { label: "Pending", value: "pending" },
+  { label: "Closed", value: "closed" },
+  { label: "Cancelled", value: "cancelled" },
+];
 
 export default function SalesScreen() {
-  const navigation = useNavigation(); // Use navigation hook
+  const navigation = useNavigation();
   const [stats, setStats] = useState({
     total: 0,
     totalRevenue: 0,
     avgSalePrice: 0,
   });
   const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(false); // Added loading state
-  const [refreshing, setRefreshing] = useState(false); // Added refreshing state
-  // Removed openAdd and edit state, navigation will handle modals
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [filterStatus, setFilterStatus] = useState("all"); // --- ADDED: Filter state ---
 
-  // --- Load Function ---
-  const load = useCallback(async () => {
-    setLoading(true); // Indicate loading start
+  // --- MODIFIED: Load function now accepts and uses filterStatus ---
+  const load = useCallback(async (status) => {
+    setLoading(true);
     try {
-      const r = await listSales();
+      // Pass the filter to the API. If 'all', pass an empty string.
+      const apiFilter = status === "all" ? "" : status;
+      const r = await listSales({ status: apiFilter });
+
       setRows(r.data || []);
+      // Assuming stats returned are relevant to the filter or global stats are acceptable
       setStats({
         total: r.total || 0,
         totalRevenue: r.totalRevenue || 0,
@@ -47,40 +80,46 @@ export default function SalesScreen() {
       notifyError("Failed to load sales data.");
       console.error("Load Sales Error:", error);
     } finally {
-      setLoading(false); // Indicate loading end
+      setLoading(false);
     }
-  }, []); // Empty dependency array means load runs once on mount, but focus effect handles reloads
+  }, []); // `load` itself doesn't depend on filterStatus
 
-  // --- Reload on Screen Focus ---
+  // --- Reload on Screen Focus (uses current filter) ---
   useFocusEffect(
     useCallback(() => {
-      load();
-    }, [load])
+      load(filterStatus);
+    }, [load, filterStatus]) // --- MODIFIED: Reloads if filter changes
   );
 
-  // --- Refresh Handler ---
+  // --- Refresh Handler (uses current filter) ---
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
+    await load(filterStatus);
     setRefreshing(false);
-  }, [load]);
+  }, [load, filterStatus]); // --- MODIFIED: Refreshes with current filter
 
-  // --- *** UPDATED confirmDelete function *** ---
+  // --- Filter change handler ---
+  const handleFilterChange = (newStatus) => {
+    setFilterStatus(newStatus);
+    // Trigger load manually since useFocusEffect won't re-run just from state change
+    load(newStatus);
+  };
+
+  // --- Original confirmDelete function (unchanged in logic, just formatting) ---
   const confirmDelete = (id) => {
     const deleteLogic = async () => {
       try {
-        console.log(`Attempting to delete sale with ID: ${id}`); // Log attempt
+        console.log(`Attempting to delete sale with ID: ${id}`);
         await deleteSale(id);
-        console.log(`Successfully deleted sale ID: ${id}. Reloading list...`); // Log success
-        notifySuccess("Sale deleted successfully!"); // Add success notification
-        load(); // Reload the list
+        console.log(`Successfully deleted sale ID: ${id}. Reloading list...`);
+        notifySuccess("Sale deleted successfully!");
+        load(filterStatus); // Reload with current filter
       } catch (error) {
-        // Log detailed error from backend if available
         console.error(
           `Failed to delete sale ID: ${id}`,
           error.response?.data || error
         );
-        notifyError(error.response?.data?.message || "Failed to delete sale."); // Show error notification
+        notifyError(error.response?.data?.message || "Failed to delete sale.");
       }
     };
 
@@ -88,31 +127,25 @@ export default function SalesScreen() {
     const alertMessage =
       "Are you sure you want to delete this sale record? This will also mark the associated unit as available again.";
 
-    // Use window.confirm for web, Alert.alert for native
     if (Platform.OS === "web") {
       if (window.confirm(alertMessage)) {
-        deleteLogic(); // Call delete logic if confirmed
+        deleteLogic();
       }
     } else {
       Alert.alert(alertTitle, alertMessage, [
         { text: "Cancel", style: "cancel" },
-        { text: "Delete", style: "destructive", onPress: deleteLogic }, // Call delete logic on press
+        { text: "Delete", style: "destructive", onPress: deleteLogic },
       ]);
     }
   };
-  // --- *** END OF UPDATE *** ---
 
   return (
     <View style={styles.container}>
-      {/* Use title prop for Header */}
       <Header navigation={navigation} title="Sales" />
-      <View style={styles.statsHeader}>
-        <Text style={styles.statsHeaderText}>{stats.total} Total Sales</Text>
-      </View>
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          // Added RefreshControl
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
@@ -120,238 +153,240 @@ export default function SalesScreen() {
           />
         }
       >
-        <View style={styles.kpiRow}>
-          <Kpi title="Total Sales" value={stats.total} />
-          <Kpi
+        {/* --- Performance Overview Section --- */}
+        <SectionHeader title="Performance Overview" />
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.kpiScrollView}
+        >
+          <KpiCard
+            title="Total Sales"
+            value={stats.total.toLocaleString()}
+            icon="cash-outline"
+            colors={["#4e54c8", "#8f94fb"]}
+          />
+          <KpiCard
             title="Total Revenue"
             value={`₱${Number(stats.totalRevenue).toLocaleString()}`}
+            icon="bar-chart-outline"
+            colors={["#00c6ff", "#0072ff"]}
           />
-        </View>
-        <View style={styles.avgPriceCard}>
-          <Text style={styles.avgPriceLabel}>Average Sale Price</Text>
-          <Text style={styles.avgPriceValue}>
-            ₱{Number(stats.avgSalePrice).toLocaleString()}
-          </Text>
-        </View>
+          <KpiCard
+            title="Avg. Sale Price"
+            value={`₱${Number(stats.avgSalePrice).toLocaleString("en-US", {
+              maximumFractionDigits: 0,
+            })}`}
+            icon="calculator-outline"
+            colors={["#ff512f", "#f09819"]}
+          />
+        </ScrollView>
 
-        {/* Sales List */}
+        {/* --- All Sales Records Section --- */}
+        <SectionHeader title="All Sales Records" />
+
+        {/* --- Filter Bar --- */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterContainer}
+        >
+          {filterOptions.map((opt) => (
+            <FilterPill
+              key={opt.value}
+              label={opt.label}
+              isActive={filterStatus === opt.value}
+              onPress={() => handleFilterChange(opt.value)}
+            />
+          ))}
+        </ScrollView>
+
+        {/* --- Sales List --- */}
         <View style={styles.listContainer}>
-          {loading && !refreshing ? ( // Show loader only when loading, not refreshing
+          {loading && !refreshing ? (
             <ActivityIndicator
               size="large"
               color={colors.primary}
               style={{ marginTop: 50 }}
             />
           ) : rows.length === 0 ? (
-            <Text style={styles.emptyText}>No sales recorded yet.</Text>
+            <Text style={styles.emptyText}>
+              No sales found for "{filterStatus}" filter.
+            </Text>
           ) : (
-            rows.map((s) => (
-              <View key={s._id} style={styles.card}>
-                <View style={styles.cardHeader}>
-                  {/* Display Property Name and Unit Number */}
-                  <Text style={styles.cardTitle} numberOfLines={1}>
-                    {s.propertyName}
-                    {s.unitNumber ? ` - Unit ${s.unitNumber}` : ""}
-                  </Text>
-                  <View style={styles.cardActions}>
-                    <Pressable
-                      onPress={() =>
-                        navigation.navigate("EditSaleModal", { sale: s })
-                      } // Navigate to Edit modal
-                      style={styles.editButton}
-                    >
-                      <Text style={styles.editButtonText}>Edit</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => confirmDelete(s._id)}
-                      style={styles.deleteButton}
-                    >
-                      <Text style={styles.deleteButtonText}>Delete</Text>
-                    </Pressable>
-                  </View>
-                </View>
-                <View style={styles.cardBody}>
-                  <Text style={styles.detailText}>
-                    Buyer: {s.buyerName || "-"}
-                  </Text>
-                  <Text style={styles.detailText}>
-                    Agent: {s.agentName || "-"}
-                  </Text>
-                  <Text style={styles.detailText}>
-                    Date: {(s.saleDate || "").slice(0, 10)}
-                  </Text>
-                  <Text style={styles.priceText}>
-                    ₱ {Number(s.salePrice).toLocaleString()}
-                  </Text>
-                </View>
-              </View>
+            rows.map((sale) => (
+              <SaleCard // Using the updated SaleCard component
+                key={sale._id}
+                sale={sale}
+                onEdit={() => navigation.navigate("EditSaleModal", { sale })}
+                onDelete={() => confirmDelete(sale._id)}
+              />
             ))
           )}
         </View>
       </ScrollView>
 
-      {/* Navigate to Add modal */}
       <FAB onPress={() => navigation.navigate("AddSaleModal")} />
-
-      {/* Modals are now handled by navigation, remove direct rendering */}
-      {/* <AddSaleModal open={openAdd} onClose={(reload) => { setOpenAdd(false); if (reload) load(); }} /> */}
-      {/* <EditSaleModal sale={edit} onClose={(reload) => { setEdit(null); if (reload) load(); }} /> */}
     </View>
   );
 }
 
-// Kpi Component (minor style adjustments)
-function Kpi({ title, value }) {
+// --- SectionHeader Component ---
+function SectionHeader({ title }) {
   return (
-    <View style={styles.kpiCard}>
-      <Text style={styles.kpiTitle}>{title}</Text>
-      <Text style={styles.kpiValue}>{value}</Text>
+    <View style={styles.sectionContainer}>
+      <Text style={styles.sectionTitle}>{title}</Text>
     </View>
   );
 }
 
-// --- Added Styles ---
+// --- KpiCard Component ---
+function KpiCard({ title, value, icon, colors: gradientColors }) {
+  return (
+    <LinearGradient colors={gradientColors} style={styles.kpiCard}>
+      <Ionicons
+        name={icon}
+        size={24}
+        color={colors.white}
+        style={styles.kpiIcon}
+      />
+      <View>
+        <Text style={styles.kpiTitle}>{title}</Text>
+        <Text style={styles.kpiValue}>{value}</Text>
+      </View>
+    </LinearGradient>
+  );
+}
+
+// --- FilterPill Component ---
+function FilterPill({ label, onPress, isActive }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[styles.filterPill, isActive && styles.filterPillActive]}
+    >
+      <Text
+        style={[styles.filterPillText, isActive && styles.filterPillTextActive]}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+// --- StatusBadge Component ---
+function StatusBadge({ status }) {
+  const { backgroundColor, color } = getStatusStyles(status);
+  return (
+    <View style={[styles.badgeContainer, { backgroundColor }]}>
+      <Text style={[styles.badgeText, { color }]}>
+        {status.charAt(0).toUpperCase() + status.slice(1)}
+      </Text>
+    </View>
+  );
+}
+
+// --- UPDATED: SaleCard Component ---
+function SaleCard({ sale, onEdit, onDelete }) {
+  return (
+    <View style={styles.card}>
+      {/* Card Header remains the same */}
+      <View style={styles.cardHeader}>
+        <View style={styles.cardTitleContainer}>
+          <Text style={styles.cardTitle} numberOfLines={1}>
+            {sale.propertyName}
+          </Text>
+          <Text style={styles.cardSubtitle} numberOfLines={1}>
+            {sale.unitNumber ? `Unit ${sale.unitNumber}` : "Property Sale"}
+          </Text>
+        </View>
+        <View style={styles.cardActions}>
+          <Pressable onPress={onEdit} style={styles.iconButton}>
+            <Ionicons name="pencil-outline" size={20} color={colors.primary} />
+          </Pressable>
+          <Pressable onPress={onDelete} style={styles.iconButton}>
+            <Ionicons name="trash-outline" size={20} color={colors.dangerText} />
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Card Body now includes the Price */}
+      <View style={styles.cardBody}>
+        {/* Row 1: Buyer & Status */}
+        <View style={styles.cardRow}>
+          <View style={styles.cardDetail}>
+            <Ionicons
+              name="person-outline"
+              size={14}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.cardDetailText} numberOfLines={1}>
+              Buyer: {sale.buyerName || "-"}
+            </Text>
+          </View>
+          <StatusBadge status={sale.status} />
+        </View>
+
+        {/* Row 2: Agent & Date */}
+        <View style={styles.cardRow}>
+          <View style={styles.cardDetail}>
+            <Ionicons
+              name="briefcase-outline"
+              size={14}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.cardDetailText} numberOfLines={1}>
+              Agent: {sale.agentName || "-"}
+            </Text>
+          </View>
+          <Text style={styles.cardDetailText}>
+            {(sale.saleDate || "").slice(0, 10)}
+          </Text>
+        </View>
+
+        {/* --- MOVED: Price is now the last item in the body --- */}
+        <View style={styles.priceContainer}>
+          <Text style={styles.priceText}>
+            ₱ {Number(sale.salePrice).toLocaleString()}
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// --- UPDATED Styles ---
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.light,
-  },
-  statsHeader: {
-    padding: 12,
-    backgroundColor: colors.border, // Use border color for subtle contrast
-  },
-  statsHeaderText: {
-    color: colors.textSecondary, // Use secondary text color
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 80, // Ensure space for FAB
-  },
-  kpiRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 12,
-  },
-  kpiCard: {
-    flex: 1,
-    backgroundColor: colors.white,
-    borderRadius: 12,
-    padding: 12,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  kpiTitle: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    marginBottom: 4,
-  },
-  kpiValue: {
-    color: colors.primary,
-    fontWeight: "700",
-    fontSize: 18,
-  },
-  avgPriceCard: {
-    backgroundColor: colors.white,
-    borderRadius: 12,
-    padding: 12,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    marginBottom: 16, // Add margin bottom
-  },
-  avgPriceLabel: {
-    fontWeight: "600",
-    marginBottom: 8,
-    color: colors.textSecondary,
-    fontSize: 13,
-  },
-  avgPriceValue: {
-    fontWeight: "700",
-    color: colors.primary,
-    fontSize: 18,
-  },
-  listContainer: {
-    gap: 12, // Use gap for spacing between cards
-  },
-  emptyText: {
-    color: colors.muted,
-    textAlign: "center",
-    marginTop: 40,
-    fontSize: 16,
-  },
-  card: {
-    backgroundColor: colors.white,
-    borderRadius: 12,
-    padding: 12,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8, // Add margin below header
-    paddingBottom: 8, // Add padding bottom
-    borderBottomWidth: 1, // Add separator line
-    borderBottomColor: colors.border,
-  },
-  cardTitle: {
-    fontWeight: "700",
-    fontSize: 16, // Slightly smaller title
-    color: colors.text,
-    flexShrink: 1, // Allow title to shrink if actions take space
-    marginRight: 10, // Add margin between title and actions
-  },
-  cardActions: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  editButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.primary, // Use primary color border
-    backgroundColor: colors.primaryLight, // Light primary bg
-  },
-  editButtonText: {
-    color: colors.primary, // Primary text color
-    fontWeight: "500",
-    fontSize: 13,
-  },
-  deleteButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: colors.danger, // Use danger color
-  },
-  deleteButtonText: {
-    color: "#fff",
-    fontWeight: "500",
-    fontSize: 13,
-  },
-  cardBody: {
-    marginTop: 8,
-    gap: 5, // Use gap for spacing details
-  },
-  detailText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  priceText: {
-    marginTop: 6, // Add margin top
-    color: colors.primary,
-    fontWeight: "700",
-    fontSize: 16, // Slightly smaller price
-  },
+  container: { flex: 1, backgroundColor: colors.light },
+  scrollContent: { paddingBottom: 100 },
+  sectionContainer: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 12 },
+  sectionTitle: { fontSize: 20, fontWeight: "bold", color: colors.text },
+  kpiScrollView: { paddingHorizontal: 16, paddingBottom: 10 },
+  kpiCard: { width: 170, height: 120, borderRadius: 16, padding: 16, marginRight: 12, justifyContent: "space-between", elevation: 4, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+  kpiIcon: { alignSelf: "flex-end", opacity: 0.8 },
+  kpiTitle: { fontSize: 14, fontWeight: "600", color: colors.white, opacity: 0.9 },
+  kpiValue: { fontSize: 22, fontWeight: "bold", color: colors.white, marginTop: 4 },
+  filterContainer: { flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingBottom: 16 },
+  filterPill: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.border },
+  filterPillActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  filterPillText: { color: colors.textSecondary, fontWeight: "600" },
+  filterPillTextActive: { color: colors.white },
+  listContainer: { gap: 12, paddingHorizontal: 16 },
+  emptyText: { color: colors.muted, textAlign: "center", marginTop: 40, fontSize: 16 },
+  card: { backgroundColor: colors.white, borderRadius: 12, elevation: 3, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 5 }, // Removed overflow: hidden
+  cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", padding: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
+  cardTitleContainer: { flex: 1, marginRight: 12 },
+  cardTitle: { fontWeight: "bold", fontSize: 17, color: colors.text },
+  cardSubtitle: { fontSize: 14, color: colors.textSecondary, marginTop: 4 },
+  cardActions: { flexDirection: "row", gap: 8 },
+  iconButton: { padding: 8, borderRadius: 20, backgroundColor: colors.light },
+  cardBody: { padding: 16, gap: 14 }, // Consolidated padding, adjusted gap
+  cardRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  cardDetail: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 },
+  cardDetailText: { fontSize: 14, color: colors.textSecondary, flexShrink: 1 },
+  badgeContainer: { borderRadius: 20, paddingVertical: 4, paddingHorizontal: 10 },
+  badgeText: { fontSize: 12, fontWeight: "bold" },
+  priceContainer: { marginTop: 4, alignItems: 'flex-end' }, // New style for price alignment
+  priceText: { color: colors.primary, fontWeight: "bold", fontSize: 20 }, // Updated price style
+  // cardFooter and priceLabel styles removed
 });

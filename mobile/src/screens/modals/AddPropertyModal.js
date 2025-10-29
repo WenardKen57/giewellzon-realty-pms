@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
   Modal,
   View,
@@ -6,12 +6,21 @@ import {
   TextInput,
   Pressable,
   Platform,
-  ScrollView,
   StyleSheet,
   Image,
   ActivityIndicator,
+  SafeAreaView,
+  Animated,
+  Dimensions,
+  Keyboard,
+  FlatList,
+  ImageBackground,
+  Alert,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import * as ImagePicker from "expo-image-picker";
+import * as Haptics from "expo-haptics";
+import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
 import {
   createProperty,
@@ -30,14 +39,17 @@ const PROPERTY_TYPES = [
   "villa",
   "compound",
 ];
+const TOTAL_STEPS = 2;
+const MAX_PHOTOS = 15;
 
+// --- Main Modal Component ---
 export default function AddPropertyModal({ navigation }) {
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
 
-  // --- FIX: Aligned state with backend model ---
+  // --- All original state is kept ---
   const [form, setForm] = useState({
-    propertyName: "", // <-- FIX: Was 'name'
+    propertyName: "",
     description: "",
     street: "",
     location: "",
@@ -49,17 +61,42 @@ export default function AddPropertyModal({ navigation }) {
     more: "",
   });
 
+  const [errors, setErrors] = useState({});
   const [videoUrl, setVideoUrl] = useState("");
   const [typePickerOpen, setTypePickerOpen] = useState(false);
+  const [thumb, setThumb] = useState(null);
+  const [photos, setPhotos] = useState([]);
 
-  const [thumb, setThumb] = useState(null); // { uri, name, type }
-  const [photos, setPhotos] = useState([]); // Array of { uri, name, type }
-
+  // --- Original logic is kept ---
   const canNextBasic = useMemo(
-    () => form.propertyName && form.description && form.province && form.city, // Check if province and city are typed
+    () => form.propertyName && form.description && form.province && form.city,
     [form]
   );
 
+  // --- ADDED: Refs for auto-focus ---
+  const nameRef = useRef(null);
+  const descRef = useRef(null);
+  const streetRef = useRef(null);
+  const provinceRef = useRef(null);
+  const cityRef = useRef(null);
+  const locationRef = useRef(null);
+  const amenitiesRef = useRef(null);
+  const videoUrlRef = useRef(null);
+
+  // --- ADDED: Animation refs ---
+  const shakeAnimation = useRef(new Animated.Value(0)).current;
+  const nextButtonOpacity = useRef(new Animated.Value(0.5)).current;
+
+  // --- Animate Next button opacity when validation changes ---
+  useEffect(() => {
+    Animated.timing(nextButtonOpacity, {
+      toValue: canNextBasic ? 1 : 0.5,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [canNextBasic]);
+
+  // --- All original API/logic functions are kept ---
   async function pickThumb() {
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -75,29 +112,63 @@ export default function AddPropertyModal({ navigation }) {
           `thumbnail.${asset.mimeType.split("/")[1] || "jpg"}`,
         type: asset.mimeType,
       });
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
   }
 
+  // --- MODIFIED: pickPhotos respects MAX_PHOTOS limit ---
   async function pickPhotos() {
+    const currentCount = photos.length;
+    if (currentCount >= MAX_PHOTOS) {
+      notifyError(`You can only select up to ${MAX_PHOTOS} photos.`);
+      return;
+    }
+
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsMultipleSelection: true,
       quality: 0.85,
+      selectionLimit: MAX_PHOTOS - currentCount, // Only allow picking the remaining number
     });
 
     if (!res.canceled && res.assets && res.assets.length > 0) {
-      setPhotos(
-        res.assets
-          .map((asset, i) => ({
-            uri: asset.uri,
-            name:
-              asset.fileName ||
-              `photo_${i}.${asset.mimeType.split("/")[1] || "jpg"}`,
-            type: asset.mimeType,
-          }))
-          .slice(0, 15)
-      );
+      const newPhotos = res.assets.map((asset, i) => ({
+        uri: asset.uri,
+        name:
+          asset.fileName ||
+          `photo_${i}.${asset.mimeType.split("/")[1] || "jpg"}`,
+        type: asset.mimeType,
+      }));
+      setPhotos((prevPhotos) => [...prevPhotos, ...newPhotos]);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
+  }
+
+  // --- NEW: Remove Thumbnail ---
+  function removeThumb() {
+    setThumb(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }
+
+  // --- NEW: Remove specific photo from gallery ---
+  function removePhoto(uriToRemove) {
+    Alert.alert(
+      "Remove Photo",
+      "Are you sure you want to remove this photo?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: () => {
+            setPhotos((prevPhotos) =>
+              prevPhotos.filter((photo) => photo.uri !== uriToRemove)
+            );
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          },
+        },
+      ]
+    );
   }
 
   function addVideo() {
@@ -105,23 +176,53 @@ export default function AddPropertyModal({ navigation }) {
     if (!v) return;
     setForm((s) => ({ ...s, videoTours: [...(s.videoTours || []), v] }));
     setVideoUrl("");
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    videoUrlRef.current?.clear();
   }
 
+  // --- NEW: Validation function ---
+  function validateBasicInfo() {
+    const newErrors = {};
+    if (!form.propertyName.trim())
+      newErrors.propertyName = "Property name is required.";
+    if (!form.description.trim())
+      newErrors.description = "Description is required.";
+    if (!form.province.trim()) newErrors.province = "Province is required.";
+    if (!form.city.trim()) newErrors.city = "City is required.";
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0; // Return true if no errors
+  }
+
+  // --- NEW: Shake Animation ---
+  function triggerShake() {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    shakeAnimation.setValue(0);
+    Animated.spring(shakeAnimation, {
+      toValue: 1,
+      friction: 2,
+      tension: 150,
+      useNativeDriver: true,
+    }).start(() => {
+      shakeAnimation.setValue(0); // Reset for next time
+    });
+  }
+
+  const interpolatedShake = shakeAnimation.interpolate({
+    inputRange: [0, 0.25, 0.5, 0.75, 1],
+    outputRange: [0, -10, 10, -10, 0], // TranslateX
+  });
+
+  // --- MODIFIED: Save function uses new validation ---
   async function save() {
-    // --- 1. ADD VALIDATION HERE ---
-    if (
-      !form.propertyName ||
-      !form.description ||
-      !form.province ||
-      !form.city
-    ) {
+    if (!validateBasicInfo()) {
       notifyError(
         "Please fill in all required fields (*) on the Basic Info tab."
       );
-      setStep(0); // Go back to the first step so the user can see what's missing
-      return; // Stop the save process
+      setStep(0);
+      triggerShake();
+      return;
     }
-    // --- End of Validation ---
 
     setSaving(true);
     try {
@@ -151,256 +252,134 @@ export default function AddPropertyModal({ navigation }) {
       navigation.goBack();
     } catch (e) {
       notifyError(e?.response?.data?.message || "Failed to add property");
-      // Optional: If the error suggests a validation issue, maybe navigate back to step 0
-      // if (e?.response?.status === 400) { setStep(0); }
     } finally {
       setSaving(false);
     }
   }
 
+  // --- NEW: Confirmation Alert for Saving ---
+  function confirmSave() {
+    Alert.alert("Save Property", "Are you sure you want to save this property?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Save",
+        style: "default",
+        onPress: () => {
+          save(); // Call original save function
+        },
+      },
+    ]);
+  }
+
+  // --- NEW: Confirmation Alert for Canceling ---
+  function confirmCancel() {
+    Alert.alert(
+      "Discard Changes?",
+      "Are you sure you want to exit? Any unsaved changes will be lost.",
+      [
+        { text: "Stay", style: "cancel" },
+        {
+          text: "Discard",
+          style: "destructive",
+          onPress: () => {
+            navigation.goBack(); // Go back only if confirmed
+          },
+        },
+      ]
+    );
+  }
+
+  // --- NEW: Handlers for bottom bar ---
+  const handleNext = () => {
+    Keyboard.dismiss();
+    if (step === 0) {
+      if (validateBasicInfo()) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        setStep(1);
+      } else {
+        triggerShake();
+      }
+    } else {
+      // On final step, "Next" button is "Save"
+      confirmSave(); // --- MODIFIED: Show confirm alert first
+    }
+  };
+
+  const handleBack = () => {
+    Keyboard.dismiss();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (step === 0) {
+      confirmCancel(); // --- MODIFIED: Show confirm alert first
+    } else {
+      setStep(0);
+    }
+  };
+
   return (
     <Modal
       visible={true}
       animationType="slide"
-      transparent
+      transparent={false}
       onRequestClose={() => navigation.goBack()}
     >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          {/* Updated Title */}
-          <Text style={styles.modalTitle}>Add Property (Building/Complex)</Text>
-          {/* Simplified Stepper */}
-          <View style={styles.stepper}>
-            {["Basic", "Media"].map((t, i) => (
-              <Text
-                key={t}
-                style={[styles.stepText, i === step && styles.stepTextActive]}
-              >
-                {t}
-              </Text>
-            ))}
-          </View>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.modalContainer}>
+          <Stepper step={step} totalSteps={TOTAL_STEPS} />
 
-          <ScrollView style={styles.formContainer}>
-            {/* --- STEP 0: Basic Info --- */}
+          <KeyboardAwareScrollView
+            style={styles.formContainer}
+            contentContainerStyle={styles.formContentContainer}
+            keyboardShouldPersistTaps="handled"
+            enableOnAndroid={true}
+            extraScrollHeight={Platform.OS === "android" ? 150 : 0}
+          >
             {step === 0 && (
-              <View style={styles.stepView}>
-                <L label="Property Name* (e.g., Building Name)">
-                  <T
-                    value={form.propertyName}
-                    onChangeText={(v) =>
-                      setForm((s) => ({ ...s, propertyName: v }))
-                    }
-                    placeholder="e.g., The Grand Residences"
-                  />
-                </L>
-                <L label="Description* (About the building/complex)">
-                  <T
-                    value={form.description}
-                    onChangeText={(v) =>
-                      setForm((s) => ({ ...s, description: v }))
-                    }
-                    placeholder="Building amenities, location highlights..."
-                    multiline
-                  />
-                </L>
-                <L label="Property Type* (Overall type)">
-                  <Pressable
-                    onPress={() => setTypePickerOpen(true)}
-                    style={styles.pickerButton}
-                  >
-                    <Text style={{ color: colors.text }}>
-                      {/* Capitalize for display */}
-                      {form.propertyType.charAt(0).toUpperCase() +
-                        form.propertyType.slice(1)}
-                    </Text>
-                  </Pressable>
-                </L>
-                <L label="Street Address">
-                  <T
-                    value={form.street}
-                    onChangeText={(v) => setForm((s) => ({ ...s, street: v }))}
-                    placeholder="e.g., 123 Main St"
-                  />
-                </L>
-
-                {/* --- Province Input --- */}
-                <L label="Province*">
-                  <T
-                    value={form.province}
-                    onChangeText={(v) =>
-                      setForm((s) => ({ ...s, province: v }))
-                    }
-                    placeholder="Enter province name"
-                  />
-                </L>
-
-                {/* --- City Input --- */}
-                <L label="City*">
-                  <T
-                    value={form.city}
-                    onChangeText={(v) => setForm((s) => ({ ...s, city: v }))}
-                    placeholder="Enter city name"
-                  />
-                </L>
-
-                <L label="Additional location details (optional)">
-                  <T
-                    value={form.location}
-                    onChangeText={(v) =>
-                      setForm((s) => ({ ...s, location: v }))
-                    }
-                    placeholder="Village/Barangay or specific notes"
-                  />
-                </L>
-                {/* --- Amenities Input --- */}
-                <L label="Amenities (comma-separated)">
-                  <T
-                    value={form.amenities.join(", ")} // Join array for display
-                    // Split string into array, trim whitespace, remove empty strings
-                    onChangeText={(v) =>
-                      setForm((s) => ({
-                        ...s,
-                        amenities: v
-                          .split(",")
-                          .map((a) => a.trim())
-                          .filter(Boolean),
-                      }))
-                    }
-                    placeholder="e.g., Swimming Pool, Gym, Parking Area"
-                  />
-                </L>
-              </View>
+              <BasicInfoStep
+                form={form}
+                setForm={setForm}
+                errors={errors}
+                setTypePickerOpen={setTypePickerOpen}
+                nameRef={nameRef}
+                descRef={descRef}
+                streetRef={streetRef}
+                provinceRef={provinceRef}
+                cityRef={cityRef}
+                locationRef={locationRef}
+                amenitiesRef={amenitiesRef}
+              />
             )}
 
-            {/* --- STEP 1: Media --- */}
             {step === 1 && (
-              <View style={styles.stepView}>
-                <Text style={styles.infoText}>
-                  Add photos/videos for the overall property (building exterior,
-                  lobby, amenities). Unit-specific photos are added separately
-                  later.
-                </Text>
-
-                <L label="Thumbnail (Main Image)">
-                  <Pressable onPress={pickThumb} style={styles.imagePicker}>
-                    {thumb ? (
-                      <Image
-                        source={{ uri: thumb.uri }}
-                        style={styles.previewImage}
-                        {...(Platform.OS === "web" && {
-                          referrerPolicy: "no-referrer",
-                        })}
-                      />
-                    ) : (
-                      <Text>Click to upload thumbnail</Text>
-                    )}
-                  </Pressable>
-                  {thumb && (
-                    <Text style={styles.infoTextSm}>
-                      {thumb.name} ({thumb.type})
-                    </Text>
-                  )}
-                </L>
-
-                <L label="Photos (Gallery Images)">
-                  <Pressable
-                    onPress={pickPhotos}
-                    style={[styles.imagePicker, styles.imagePickerSmall]}
-                  >
-                    <Text>Select Photos (up to 15)</Text>
-                  </Pressable>
-                  <ScrollView horizontal style={styles.photosContainer}>
-                    {photos.map((photo) => (
-                      <Image
-                        key={photo.uri}
-                        source={{ uri: photo.uri }}
-                        style={styles.previewImageSmall}
-                        {...(Platform.OS === "web" && {
-                          referrerPolicy: "no-referrer",
-                        })}
-                      />
-                    ))}
-                  </ScrollView>
-                  <Text style={styles.infoTextSm}>
-                    {photos.length}/15 selected
-                  </Text>
-                </L>
-
-                <L label="Video Tour URL (YouTube/Vimeo)">
-                  <T
-                    value={videoUrl}
-                    onChangeText={setVideoUrl}
-                    placeholder="https://youtube.com/watch?v=..."
-                  />
-                </L>
-                <Pressable
-                  onPress={addVideo}
-                  disabled={!videoUrl}
-                  style={[
-                    styles.button,
-                    styles.buttonSmall,
-                    { alignSelf: "flex-start", opacity: videoUrl ? 1 : 0.5 },
-                  ]}
-                >
-                  <Text style={styles.buttonText}>Add Video URL</Text>
-                </Pressable>
-                {!!form.videoTours?.length && (
-                  <Text style={styles.infoTextSm}>
-                    {form.videoTours.length} video link(s) added
-                  </Text>
-                )}
-              </View>
+              <MediaStep
+                form={form}
+                setForm={setForm}
+                videoUrl={videoUrl}
+                setVideoUrl={setVideoUrl}
+                addVideo={addVideo}
+                thumb={thumb}
+                pickThumb={pickThumb}
+                removeThumb={removeThumb}
+                photos={photos}
+                pickPhotos={pickPhotos}
+                removePhoto={removePhoto}
+                videoUrlRef={videoUrlRef}
+              />
             )}
-            {/* Steps 2 & 3 Removed */}
-          </ScrollView>
+          </KeyboardAwareScrollView>
 
-          {/* --- Navigation --- */}
-          <View style={styles.navigation}>
-            <Pressable
-              onPress={() =>
-                step === 0 ? navigation.goBack() : setStep((s) => s - 1)
-              }
-              style={[styles.button, styles.buttonOutline]}
-            >
-              {/* Text changes based on step */}
-              <Text style={styles.buttonOutlineText}>
-                {step === 0 ? "Cancel" : "Back"}
-              </Text>
-            </Pressable>
-            {/* Only show Next button if not on the last step (step 1) */}
-            {step < 1 ? (
-              <Pressable
-                onPress={() => setStep((s) => s + 1)} // Simplified logic
-                // Disable Next on step 0 if basic info is invalid
-                disabled={step === 0 && !canNextBasic}
-                style={[
-                  styles.button,
-                  step === 0 && !canNextBasic && styles.buttonDisabled,
-                ]}
-              >
-                <Text style={styles.buttonText}>Next</Text>
-              </Pressable>
-            ) : (
-              // Show Save button only on the last step (step 1)
-              <Pressable
-                onPress={save}
-                disabled={saving}
-                style={[styles.button, saving && styles.buttonDisabled]}
-              >
-                {saving ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  // Changed button text
-                  <Text style={styles.buttonText}>Save Property</Text>
-                )}
-              </Pressable>
-            )}
-          </View>
+          <BottomNavBar
+            step={step}
+            totalSteps={TOTAL_STEPS}
+            onBack={handleBack}
+            onNext={handleNext}
+            canNext={step === 0 ? canNextBasic : true}
+            isSaving={saving}
+            shakeStyle={{ transform: [{ translateX: interpolatedShake }] }}
+            opacityStyle={{ opacity: step === 0 ? nextButtonOpacity : 1 }}
+          />
         </View>
-      </View>
+      </SafeAreaView>
 
-      {/* --- Property Type Modal --- */}
       <PickerModal
         visible={typePickerOpen}
         onClose={() => setTypePickerOpen(false)}
@@ -415,147 +394,408 @@ export default function AddPropertyModal({ navigation }) {
           setTypePickerOpen(false);
         }}
       />
-      {/* Province/City Pickers Removed */}
+
+      <LoadingOverlay visible={saving} />
     </Modal>
   );
 }
 
-// --- L & T Components ---
-function L({ label, children, style }) {
+// --- NEW: Stepper Component ---
+function Stepper({ step, totalSteps }) {
+  const progress = useRef(new Animated.Value(0)).current;
+  const screenWidth = Dimensions.get("window").width;
+
+  useEffect(() => {
+    Animated.timing(progress, {
+      toValue: ((step + 1) / totalSteps) * screenWidth,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  }, [step, totalSteps, screenWidth]);
+
+  return (
+    <View style={styles.stepperContainer}>
+      <Text style={styles.stepperTitle}>Add Property</Text>
+      <Text style={styles.stepperSubtitle}>
+        Step {step + 1} of {totalSteps}: {step === 0 ? "Basic Info" : "Media"}
+      </Text>
+      <View style={styles.progressBarBackground}>
+        <Animated.View style={[styles.progressBar, { width: progress }]} />
+      </View>
+    </View>
+  );
+}
+
+// --- NEW: Step 1 Component ---
+function BasicInfoStep({
+  form,
+  setForm,
+  errors,
+  setTypePickerOpen,
+  nameRef,
+  descRef,
+  streetRef,
+  provinceRef,
+  cityRef,
+  locationRef,
+  amenitiesRef,
+}) {
+  return (
+    <View style={styles.stepView}>
+      <L label="Property Name*" error={errors.propertyName}>
+        <T
+          ref={nameRef}
+          value={form.propertyName}
+          onChangeText={(v) => setForm((s) => ({ ...s, propertyName: v }))}
+          placeholder="e.g., The Grand Residences"
+          returnKeyType="next"
+          onSubmitEditing={() => descRef.current?.focus()}
+          error={!!errors.propertyName}
+        />
+      </L>
+      <L label="Description*" error={errors.description}>
+        <T
+          ref={descRef}
+          value={form.description}
+          onChangeText={(v) => setForm((s) => ({ ...s, description: v }))}
+          placeholder="Building amenities, location highlights..."
+          multiline
+          minHeight={100}
+          error={!!errors.description}
+        />
+      </L>
+      <L label="Property Type*">
+        <Pressable
+          onPress={() => setTypePickerOpen(true)}
+          style={styles.pickerButton}
+        >
+          <Text style={styles.pickerButtonText}>
+            {form.propertyType.charAt(0).toUpperCase() +
+              form.propertyType.slice(1)}
+          </Text>
+          <Ionicons
+            name="chevron-down"
+            size={20}
+            color={colors.textSecondary}
+          />
+        </Pressable>
+      </L>
+      <L label="Street Address">
+        <T
+          ref={streetRef}
+          value={form.street}
+          onChangeText={(v) => setForm((s) => ({ ...s, street: v }))}
+          placeholder="e.g., 123 Main St"
+          returnKeyType="next"
+          onSubmitEditing={() => provinceRef.current?.focus()}
+        />
+      </L>
+      <L label="Province*" error={errors.province}>
+        <T
+          ref={provinceRef}
+          value={form.province}
+          onChangeText={(v) => setForm((s) => ({ ...s, province: v }))}
+          placeholder="Enter province name"
+          returnKeyType="next"
+          onSubmitEditing={() => cityRef.current?.focus()}
+          error={!!errors.province}
+        />
+      </L>
+      <L label="City*" error={errors.city}>
+        <T
+          ref={cityRef}
+          value={form.city}
+          onChangeText={(v) => setForm((s) => ({ ...s, city: v }))}
+          placeholder="Enter city name"
+          returnKeyType="next"
+          onSubmitEditing={() => locationRef.current?.focus()}
+          error={!!errors.city}
+        />
+      </L>
+      <L label="Additional location details (optional)">
+        <T
+          ref={locationRef}
+          value={form.location}
+          onChangeText={(v) => setForm((s) => ({ ...s, location: v }))}
+          placeholder="Village/Barangay or specific notes"
+          returnKeyType="next"
+          onSubmitEditing={() => amenitiesRef.current?.focus()}
+        />
+      </L>
+      <L label="Amenities (comma-separated)">
+        <T
+          ref={amenitiesRef}
+          value={form.amenities.join(", ")}
+          onChangeText={(v) =>
+            setForm((s) => ({
+              ...s,
+              amenities: v.split(",").map((a) => a.trim()).filter(Boolean),
+            }))
+          }
+          placeholder="e.g., Swimming Pool, Gym, Parking"
+          returnKeyType="done"
+        />
+      </L>
+    </View>
+  );
+}
+
+// --- NEW: Step 2 Component ---
+function MediaStep({
+  form,
+  videoUrl,
+  setVideoUrl,
+  addVideo,
+  thumb,
+  pickThumb,
+  removeThumb,
+  photos,
+  pickPhotos,
+  removePhoto,
+  videoUrlRef,
+}) {
+  // --- NEW: Render function for photo grid ---
+  const renderPhotoItem = ({ item, index }) => {
+    if (item.isAddButton) {
+      if (photos.length >= MAX_PHOTOS) return null;
+      return (
+        <Pressable
+          style={[styles.photoGridItem, styles.photoGridAddButton]}
+          onPress={pickPhotos}
+        >
+          <Ionicons name="add" size={40} color={colors.primary} />
+          <Text style={styles.photoGridAddSubText}>Add Photos</Text>
+        </Pressable>
+      );
+    }
+
+    return (
+      <View style={styles.photoGridItem}>
+        <ImageBackground
+          source={{ uri: item.uri }}
+          style={styles.photoGridImage}
+          imageStyle={{ borderRadius: 8 }}
+          {...(Platform.OS === "web" && { referrerPolicy: "no-referrer" })}
+        >
+          <Pressable
+            style={styles.photoRemoveButton}
+            onPress={() => removePhoto(item.uri)}
+          >
+            <Ionicons name="close" size={18} color={colors.white} />
+          </Pressable>
+        </ImageBackground>
+      </View>
+    );
+  };
+
+  const photoGridData = [...photos, { isAddButton: true }];
+
+  return (
+    <View style={styles.stepView}>
+      <L label="Thumbnail (Main Image)">
+        <Pressable onPress={pickThumb} style={styles.thumbPicker}>
+          {thumb ? (
+            <ImageBackground
+              source={{ uri: thumb.uri }}
+              style={styles.thumbPreview}
+              imageStyle={styles.thumbPreviewImage}
+              {...(Platform.OS === "web" && { referrerPolicy: "no-referrer" })}
+            >
+              <Pressable style={styles.thumbRemoveButton} onPress={removeThumb}>
+                <Ionicons name="close" size={20} color={colors.white} />
+              </Pressable>
+            </ImageBackground>
+          ) : (
+            <View style={styles.thumbPlaceholder}>
+              <MaterialCommunityIcons
+                name="image-outline"
+                size={50}
+                color={colors.textSecondary}
+              />
+              <Text style={styles.thumbPlaceholderText}>
+                Upload Main Thumbnail
+              </Text>
+              <Text style={styles.infoTextSm}>4:3 Ratio Recommended</Text>
+            </View>
+          )}
+        </Pressable>
+      </L>
+
+      <L label={`Photos (${photos.length} / ${MAX_PHOTOS})`}>
+        <FlatList
+          data={photoGridData}
+          renderItem={renderPhotoItem}
+          keyExtractor={(item, index) => item.uri || `add-${index}`}
+          numColumns={3}
+          style={styles.photoGridContainer}
+          scrollEnabled={false}
+        />
+      </L>
+
+      <L label="Video Tour URL (YouTube/Vimeo)">
+        <T
+          ref={videoUrlRef}
+          value={videoUrl}
+          onChangeText={setVideoUrl}
+          placeholder="https://youtube.com/watch?v=..."
+          returnKeyType="done"
+          onSubmitEditing={addVideo}
+        />
+      </L>
+      <Pressable
+        onPress={addVideo}
+        disabled={!videoUrl.trim()}
+        style={[
+          styles.buttonSmall,
+          !videoUrl.trim() && styles.buttonSmallDisabled,
+        ]}
+      >
+        <Text style={styles.buttonSmallText}>Add Video URL</Text>
+      </Pressable>
+      {form.videoTours?.map((url, index) => (
+        <Text key={index} style={styles.infoTextSmUrl} numberOfLines={1}>
+          <Ionicons name="link" size={13} color={colors.textSecondary} /> {url}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
+// --- NEW: Bottom Bar Component ---
+function BottomNavBar({
+  step,
+  totalSteps,
+  onBack,
+  onNext,
+  canNext,
+  isSaving,
+  shakeStyle,
+  opacityStyle,
+}) {
+  return (
+    <View style={styles.navigation}>
+      <Pressable onPress={onBack} style={[styles.button, styles.buttonOutline]}>
+        <Text style={styles.buttonOutlineText}>
+          {step === 0 ? "Cancel" : "Back"}
+        </Text>
+      </Pressable>
+
+      <Animated.View
+        style={[{ flex: 1, marginHorizontal: 8 }, shakeStyle, opacityStyle]}
+      >
+        <Pressable
+          onPress={onNext}
+          disabled={!canNext || isSaving}
+          style={[
+            styles.button,
+            styles.buttonFull,
+            (!canNext || isSaving) && styles.buttonDisabled,
+          ]}
+        >
+          {isSaving ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>
+              {step < totalSteps - 1 ? "Next" : "Save Property"}
+            </Text>
+          )}
+        </Pressable>
+      </Animated.View>
+    </View>
+  );
+}
+
+// --- NEW: Loading Overlay Component ---
+function LoadingOverlay({ visible }) {
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <View style={styles.loadingOverlay}>
+        <View style={styles.loadingBox}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Saving Property...</Text>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// --- L & T Components (Updated Styles) ---
+function L({ label, children, style, error }) {
   return (
     <View style={[styles.labelContainer, style]}>
       <Text style={styles.labelText}>{label}</Text>
       {children}
+      {error && <Text style={styles.errorText}>{error}</Text>}
     </View>
   );
 }
-function T(props) {
+
+// --- FIXED: Use React.forwardRef to correctly pass ref to TextInput ---
+const T = React.forwardRef((props, ref) => {
+  const { minHeight, error, ...rest } = props;
   const baseStyle = [
     styles.textInputBase,
     props.multiline && styles.textInputMultiline,
+    minHeight ? { minHeight } : {},
+    error && styles.textInputError,
   ];
   return (
     <TextInput
-      {...props}
-      placeholderTextColor="#6B7280"
+      {...rest}
+      ref={ref} // Correctly pass the forwarded ref
+      placeholderTextColor={colors.textSecondary}
       underlineColorAndroid="transparent"
       style={[baseStyle, props.style]}
     />
   );
-}
+});
 
+// --- STYLES: Compressed to single lines as requested ---
 const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.35)",
-    justifyContent: "center",
-    padding: 16,
-  },
-  modalContent: {
-    backgroundColor: colors.white,
-    borderRadius: 12,
-    padding: 16,
-    maxHeight: "90%",
-  },
-  modalTitle: {
-    fontWeight: "700",
-    fontSize: 18,
-    textAlign: "center",
-    color: colors.text,
-    marginBottom: 5, // Added margin
-  },
-  stepper: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 12,
-    marginVertical: 12,
-    paddingBottom: 10, // Added padding
-    borderBottomWidth: 1, // Added border
-    borderBottomColor: colors.border,
-  },
-  stepText: { color: colors.muted, fontWeight: "500" },
-  stepTextActive: { color: colors.primary, fontWeight: "700" },
-  formContainer: { maxHeight: "70%", paddingBottom: 20 },
-  stepView: { gap: 12, paddingHorizontal: 4, paddingBottom: 16 }, // Increased gap
-  navigation: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: 12,
-  },
-  button: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    minWidth: 100, // Ensure buttons have minimum width
-  },
-  buttonText: { color: "#fff", fontWeight: "600" },
-  buttonOutline: {
-    borderWidth: 1,
-    borderColor: colors.gray,
-    backgroundColor: "transparent",
-  },
-  buttonOutlineText: { color: colors.text, fontWeight: "600" },
-  buttonDisabled: { backgroundColor: colors.gray, opacity: 0.7 },
-  buttonSmall: { paddingVertical: 8, paddingHorizontal: 12 },
-  labelContainer: { marginBottom: 0 }, // Reduced margin bottom
-  labelText: {
-    color: "#6B7280",
-    fontSize: 13,
-    marginBottom: 4,
-    fontWeight: "500",
-  },
-  textInputBase: {
-    borderWidth: 1,
-    borderColor: "#D9D9D9",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    backgroundColor: "#fff",
-    height: 44,
-    color: colors.text,
-  },
-  textInputMultiline: {
-    minHeight: 80,
-    paddingVertical: 10,
-    textAlignVertical: "top",
-    height: "auto",
-  },
-  pickerButton: {
-    // Keep for Property Type
-    borderWidth: 1,
-    borderColor: "#D9D9D9",
-    borderRadius: 8,
-    padding: 10,
-    height: 44,
-    justifyContent: "center",
-    backgroundColor: "#fff", // Match TextInput background
-  },
-  // pickerButtonDisabled removed
-  infoText: { color: colors.muted, fontSize: 13, marginBottom: 4 },
-  infoTextSm: { color: colors.muted, fontSize: 12, marginTop: 2 },
-  imagePicker: {
-    borderWidth: 1,
-    borderColor: colors.gray,
-    borderStyle: "dashed",
-    borderRadius: 8,
-    padding: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 120,
-  },
-  imagePickerSmall: { minHeight: 60, padding: 12 },
-  previewImage: { width: "100%", height: 150, borderRadius: 8 },
-  photosContainer: { flexDirection: "row", paddingVertical: 8 },
-  previewImageSmall: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-    marginRight: 8,
-    backgroundColor: colors.light,
-  },
-  // statusToggle and statusButton removed
+  safeArea: { flex: 1, backgroundColor: colors.white },
+  modalContainer: { flex: 1, display: "flex", flexDirection: "column" },
+  stepperContainer: { padding: 20, paddingTop: Platform.OS === "android" ? 20 : 0, backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.border },
+  stepperTitle: { fontSize: 22, fontWeight: "bold", color: colors.text },
+  stepperSubtitle: { fontSize: 15, color: colors.textSecondary, marginTop: 4 },
+  progressBarBackground: { height: 4, backgroundColor: colors.border, borderRadius: 2, marginTop: 16 },
+  progressBar: { height: 4, backgroundColor: colors.primary, borderRadius: 2 },
+  formContainer: { flex: 1 },
+  formContentContainer: { padding: 20, paddingBottom: 100 },
+  stepView: { gap: 20 },
+  navigation: { position: "absolute", bottom: 0, left: 0, right: 0, flexDirection: "row", justifyContent: "space-between", padding: 20, paddingTop: 16, backgroundColor: colors.white, borderTopWidth: 1, borderTopColor: colors.border },
+  button: { flex: 1, paddingVertical: 14, paddingHorizontal: 20, borderRadius: 12, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", marginHorizontal: 8 },
+  buttonFull: { marginHorizontal: 0 },
+  buttonText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
+  buttonOutline: { backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.border },
+  buttonOutlineText: { color: colors.text, fontWeight: "bold", fontSize: 16 },
+  buttonDisabled: { backgroundColor: colors.gray },
+  buttonSmall: { alignSelf: "flex-start", backgroundColor: colors.primary, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8 },
+  buttonSmallText: { color: colors.white, fontWeight: "600" },
+  buttonSmallDisabled: { backgroundColor: colors.gray },
+  labelContainer: { width: "100%" },
+  labelText: { color: colors.text, fontSize: 14, fontWeight: "600", marginBottom: 8 },
+  textInputBase: { borderWidth: 1.5, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: colors.light, fontSize: 15, color: colors.text },
+  textInputMultiline: { minHeight: 80, paddingVertical: 14, textAlignVertical: "top" },
+  textInputError: { borderColor: colors.danger, backgroundColor: "#fff8f8" },
+  errorText: { fontSize: 13, color: colors.danger, marginTop: 6 },
+  pickerButton: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderWidth: 1.5, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 14, backgroundColor: colors.light, height: 50 },
+  pickerButtonText: { fontSize: 15, color: colors.text },
+  infoText: { color: colors.textSecondary, fontSize: 14, lineHeight: 20, padding: 12, backgroundColor: colors.light, borderRadius: 8 },
+  infoTextSm: { fontSize: 12, color: colors.textSecondary, textAlign: "center", marginTop: 4 },
+  infoTextSmUrl: { color: colors.textSecondary, fontSize: 13, paddingLeft: 4, marginTop: -8 },
+  thumbPicker: { width: "100%", height: 180, borderRadius: 10, borderWidth: 2, borderColor: colors.border, borderStyle: "dashed", backgroundColor: colors.light, justifyContent: "center", alignItems: "center", overflow: "hidden" },
+  thumbPlaceholder: { alignItems: "center" },
+  thumbPlaceholderText: { fontSize: 15, fontWeight: "600", color: colors.textSecondary, marginTop: 8 },
+  thumbPreview: { width: "100%", height: "100%", justifyContent: "flex-start", alignItems: "flex-end" },
+  thumbPreviewImage: { borderRadius: 8 },
+  thumbRemoveButton: { margin: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 15, width: 30, height: 30, justifyContent: "center", alignItems: "center" },
+  photoGridContainer: { marginTop: 8 },
+  photoGridItem: { flex: 1 / 3, aspectRatio: 1, padding: 4 },
+  photoGridImage: { width: "100%", height: "100%", borderRadius: 8, backgroundColor: colors.border, justifyContent: "flex-start", alignItems: "flex-end" },
+  photoRemoveButton: { margin: 4, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 12, width: 24, height: 24, justifyContent: "center", alignItems: "center" },
+  photoGridAddButton: { justifyContent: "center", alignItems: "center", backgroundColor: colors.light, borderRadius: 8, borderWidth: 2, borderColor: colors.border, borderStyle: "dashed" },
+  photoGridAddSubText: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
+  loadingOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
+  loadingBox: { backgroundColor: colors.white, borderRadius: 12, padding: 30, alignItems: "center", gap: 16, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 5 },
+  loadingText: { fontSize: 16, fontWeight: "600", color: colors.text },
 });
