@@ -28,6 +28,7 @@ import SalesManagement from "./pages/admin/SalesManagement.jsx";
 import Analytics from "./pages/admin/Analytics.jsx";
 import Profile from "./pages/admin/Profile.jsx";
 import PropertyDetailPage from "./pages/admin/PropertyDetailPage.jsx";
+import UnitDetail from "./pages/public/UnitDetail";
 
 export default function App() {
   return (
@@ -50,6 +51,7 @@ export default function App() {
           <Route path="/properties/:id" element={<PropertyDetail />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
+          <Route path="/unit/:unitId" element={<UnitDetail />} />
         </Route>
 
         {/* AUTH ROUTES */}
