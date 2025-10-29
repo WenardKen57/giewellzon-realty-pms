@@ -19,34 +19,47 @@ console.log(
   process.env.ALLOWED_ADMIN_EMAILS || "(empty)"
 );
 
+// --- CORS Configuration from .env ---
+// Read the comma-separated list from .env
+const allowedOriginsEnv = process.env.CORS_ALLOWED_ORIGINS || "";
+
+// Define default origins for development
+const defaultOrigins = [
+  "http://localhost:5173",
+  "http://localhost:8081", // Removed trailing slash
+];
+
+// Split the .env string by comma, trim whitespace, and filter out empty strings
+const allowedOrigins = allowedOriginsEnv
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter((origin) => origin) // Removes any empty strings
+  .concat(defaultOrigins); // Always include defaults for local dev
+
+console.log("[CORS] Allowed Origins:", allowedOrigins);
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    // allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+  credentials: true,
+};
+// --- End of CORS Configuration ---
+
 const app = express();
 
 app.use(helmet());
-/* FOR DEPLOYMENT
-app.use(
-  cors({
-    origin: [
-      "https://giewellzon-realty-pms-1.onrender.com",
-      "http://localhost:5173",
-    ],
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-    credentials: true,
-  })
-);
-*/
-app.use(
-  cors({
-    origin: [
-      "https://giewellzon-realty-pms-1.onrender.com",
-      "http://localhost:5173" /* Add your actual frontend domain here if it's different 
-          from the Render domain, e.g., "https://your-frontend.com"
-      */,
-      "http://localhost:8081/",
-    ],
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-    credentials: true, // This is key for authentication
-  })
-);
+
+// Use the new corsOptions
+app.use(cors(corsOptions));
 
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
