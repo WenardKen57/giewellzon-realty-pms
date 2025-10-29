@@ -42,3 +42,21 @@ export async function deleteSale(id) {
     throw error;
   }
 }
+
+// --- ADDED FOR DASHBOARD ---
+export async function getRecentSales(limit = 5) {
+  try {
+    const params = {
+      limit,
+      sortBy: "date", // Assumes 'date' is the field for sale date
+      sortOrder: "desc",
+    };
+    // listSales returns { data: [], total, ... }
+    const response = await listSales(params);
+    // OverviewScreen expects just the array
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching recent sales:", error);
+    throw error;
+  }
+}

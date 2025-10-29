@@ -45,5 +45,19 @@ export const updateStatus = async (id, status) => {
   }
 };
 
-// Remove markHandled if updateStatus covers it
-// export async function markHandled(id) { ... }
+// --- ADDED FOR DASHBOARD ---
+export const getRecentInquiries = async (limit = 5) => {
+  try {
+    // listInquiries handles sorting defaults, just pass limit
+    const params = {
+      limit,
+    };
+    // listInquiries returns { data: [], total, ... }
+    const response = await listInquiries(params);
+    // OverviewScreen expects just the array
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching recent inquiries:", error);
+    throw error;
+  }
+};
