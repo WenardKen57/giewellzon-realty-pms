@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react"; // --- MODIFIED: Added useRef
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -9,19 +9,32 @@ import {
   Image,
   RefreshControl,
   Platform,
-  TextInput, // --- ADDED ---
+  TextInput,
+  LayoutAnimation,
+  UIManager,
+  Alert,
 } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
 import { listProperties } from "../api/properties";
 import { getProvinces, getCities } from "../api/locations";
 import Header from "../components/Header";
 import FAB from "../components/FAB";
 import PickerModal from "../components/PickerModal";
+import EditPropertyModal from "../screens/modals/EditPropertyModal"; // Import the modal
 import { colors } from "../theme/colors";
 import { notifyError } from "../utils/notify";
 import { toAbsoluteUrl } from "../api/client";
 
-// --- FIX: Aligned with backend model ---
+// Enable LayoutAnimation for Android
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// --- LOGIC UNCHANGED ---
 const PROPERTY_TYPES_LIST = [
   "house",
   "condo",
@@ -32,14 +45,14 @@ const PROPERTY_TYPES_LIST = [
   "compound",
 ];
 
-// Formatted for the PickerModal
 const PROPERTY_TYPES = [
   { label: "All Types", value: "" },
   ...PROPERTY_TYPES_LIST.map((type) => ({
-    label: type.charAt(0).toUpperCase() + type.slice(1), // Capitalize label
+    label: type.charAt(0).toUpperCase() + type.slice(1),
     value: type,
   })),
 ];
+// --- END LOGIC UNCHANGED ---
 
 export default function PropertiesScreen() {
   const navigation = useNavigation();
@@ -47,27 +60,29 @@ export default function PropertiesScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [filters, setFilters] = useState({
-    search: "", // --- ADDED: Search filter ---
+    search: "",
     type: "",
     province: "",
     city: "",
   });
 
-  // --- ADDED: State for the search bar input ---
   const [searchQuery, setSearchQuery] = useState("");
-
   const [provinces, setProvinces] = useState([]);
   const [cities, setCities] = useState([]);
   const [loadingCities, setLoadingCities] = useState(false);
   const [modalVisible, setModalVisible] = useState(null);
-
-  // --- ADDED: Ref to track initial mount for effects ---
+  const [filtersVisible, setFiltersVisible] = useState(false);
   const isInitialMount = useRef(true);
 
-  // --- Load Properties based on current filters ---
+  // --- NEW STATE for Edit Modal ---
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [selectedProperty, setSelectedProperty] = useState(null);
+
+  // --- All backend/fetching logic below is UNCHANGED ---
+
   const loadProperties = useCallback(async () => {
     setLoading(true);
-    setProperties([]); // Clear previous results
+    setProperties([]);
     try {
       const activeFilters = Object.entries(filters).reduce(
         (acc, [key, value]) => {
@@ -76,19 +91,15 @@ export default function PropertiesScreen() {
         },
         {}
       );
-      // --- MODIFIED: Log the filters being sent to the API ---
-      console.log("Loading properties with filters:", activeFilters);
       const response = await listProperties(activeFilters);
       setProperties(response.data || []);
     } catch (error) {
       notifyError("Failed to load properties.");
-      console.error("Load Properties Error:", error.response?.data || error);
     } finally {
       setLoading(false);
     }
-  }, [filters]); // Dependency: filters
+  }, [filters]);
 
-  // --- Load Provinces (runs once) ---
   const loadProvinces = useCallback(async () => {
     try {
       const provData = await getProvinces();
@@ -98,15 +109,13 @@ export default function PropertiesScreen() {
       ]);
     } catch (error) {
       notifyError("Failed to load provinces.");
-      console.error("Load Provinces Error:", error.response?.data || error);
     }
   }, []);
 
   useEffect(() => {
     loadProvinces();
-  }, [loadProvinces]); // Runs only on mount
+  }, [loadProvinces]);
 
-  // --- Fetch Cities when Province changes ---
   const fetchCities = useCallback(async (selectedProvince) => {
     if (selectedProvince) {
       setLoadingCities(true);
@@ -119,93 +128,81 @@ export default function PropertiesScreen() {
         ]);
       } catch (error) {
         notifyError("Failed to load cities for selected province.");
-        console.error(
-          `Load Cities Error (${selectedProvince}):`,
-          error.response?.data || error
-        );
         setCities([]);
       } finally {
         setLoadingCities(false);
       }
     } else {
-      setCities([]); // Clear cities if province is deselected
+      setCities([]);
       setFilters((prev) => ({ ...prev, city: "" }));
     }
   }, []);
 
-  // --- EFFECT 1: Close Modals whenever the screen gains focus ---
   useFocusEffect(
     useCallback(() => {
-      setModalVisible(null); // Force close modals
+      setModalVisible(null);
       return () => {};
     }, [])
   );
 
-  // --- MODIFIED: EFFECT 2: Load Properties on initial mount AND when filters change ---
-  // This is the main fix. This runs on mount and whenever `loadProperties`
-  // (which depends on `filters`) changes.
   useEffect(() => {
     loadProperties();
   }, [loadProperties]);
 
-  // --- MODIFIED: EFFECT 3: Reload properties on screen focus (but skip initial mount) ---
-  // This handles reloading data when you navigate *back* to the screen,
-  // but skips the very first load (which EFFECT 2 handled).
   useFocusEffect(
     useCallback(() => {
       if (isInitialMount.current) {
-        // On mount, `useEffect` (EFFECT 2) already ran.
-        // We just mark the initial mount as complete.
         isInitialMount.current = false;
       } else {
-        // On subsequent focuses (e.g., navigating back), we reload.
         loadProperties();
       }
     }, [loadProperties])
   );
 
-  // --- Refresh Control ---
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    // --- MODIFIED: Clear search query on refresh ---
     setSearchQuery("");
-    setFilters((prev) => ({ ...prev, search: "" }));
-    // We must await the *new* loadProperties created by the filter change,
-    // so we call listProperties directly with cleared filters.
+    setFilters({ search: "", type: "", province: "", city: "" });
+    setCities([]);
+    try {
+      const response = await listProperties({});
+      setProperties(response.data || []);
+      await loadProvinces();
+    } catch (error) {
+      notifyError("Failed to refresh properties.");
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadProvinces]);
 
-    // Simpler: Just reload all data.
-    // Note: The filter state won't update in time for loadProperties()
-    // if we don't handle it carefully.
-    // Let's just reload provinces and current-filter-properties.
-    await Promise.all([loadProperties(), loadProvinces()]);
-    setRefreshing(false);
-  }, [loadProperties, loadProvinces]); // Keep original dependencies
-
-  // --- Handle Filter Selection (when an item is chosen in the modal) ---
   const handleFilterChange = (name, value) => {
     setModalVisible(null);
     setFilters((prev) => {
       const newFilters = { ...prev, [name]: value };
       if (name === "province") {
-        newFilters.city = ""; // Reset city filter if province changes
-        fetchCities(value); // Fetch new cities based on the selected province
+        newFilters.city = "";
+        fetchCities(value);
       }
       return newFilters;
     });
   };
 
-  // --- ADDED: Handle Search Input ---
   const handleSearchSubmit = () => {
     setFilters((prev) => ({ ...prev, search: searchQuery.trim() }));
   };
 
-  // --- ADDED: Handle Search Clear ---
-  const handleSearchClear = () => {
-    setSearchQuery("");
-    setFilters((prev) => ({ ...prev, search: "" }));
+  // --- THIS IS YOUR ANIMATION LOGIC (UNCHANGED) ---
+  const toggleFilterPanel = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
+    setFiltersVisible((prev) => !prev);
   };
 
-  // --- Open a Specific Modal ---
+  const handleClearFilters = () => {
+    setFilters({ search: "", type: "", province: "", city: "" });
+    setSearchQuery("");
+    setCities([]);
+  };
+
   const openModal = (modalName) => {
     if (modalName === "city") {
       if (filters.province && !loadingCities) {
@@ -216,133 +213,285 @@ export default function PropertiesScreen() {
     }
   };
 
-  // --- Render Property Card ---
-  const renderItem = ({ item }) => (
-    <Pressable
-      style={styles.card}
-      onPress={() =>
-        navigation.navigate("PropertyDetails", { propertyId: item._id })
-      }
-    >
-      <Image
-        source={{
-          uri: toAbsoluteUrl(
-            // --- FIX: Read image as a direct string ---
-            item.thumbnail ||
-              item.photos?.[0] ||
-              "https://placehold.co/600x400?text=No+Image"
-          ),
-        }}
-        style={styles.cardImage}
-        {...(Platform.OS === "web" && { referrerPolicy: "no-referrer" })}
-      />
-      <View style={styles.cardContent}>
-        <Text style={styles.cardTitle} numberOfLines={2}>
-          {item.propertyName}
-        </Text>
-        <Text style={styles.cardLocation} numberOfLines={1}>
-          {item.city}, {item.province}
-        </Text>
-        {/* --- FIX: UPDATED PER YOUR REQUEST --- */}
-        <Text
-          style={[
-            styles.cardStatus,
-            {
-              color:
-                item.status === "sold" ? colors.dangerText : colors.successText,
-            },
-          ]}
-        >
-          {item.status === "sold" ? "Sold Out" : "Available"}
-        </Text>
-        {/* --- END OF FIX --- */}
-      </View>
-      {item.featured && (
-        <View style={styles.featuredBadge}>
-          <Text style={styles.featuredBadgeText}>⭐ Featured</Text>
-        </View>
-      )}
-    </Pressable>
-  );
+  const getTypeLabel = (value) => {
+    return PROPERTY_TYPES.find((p) => p.value === value)?.label || "";
+  };
+  // --- END OF UNCHANGED LOGIC ---
 
-  // --- Main Component Return ---
+  // --- MODIFIED: Opens the Edit Modal ---
+  const handleEditProperty = (property) => {
+    setSelectedProperty(property); // Set the full property object
+    setEditModalVisible(true); // Open the modal
+  };
+
+  // --- NEW: Handles successful save from modal ---
+  const handleEditSave = () => {
+    setEditModalVisible(false);
+    setSelectedProperty(null);
+    loadProperties(); // Refresh the list to show changes
+  };
+
+  const handleDeleteProperty = (propertyId) => {
+    console.log("DELETE property:", propertyId);
+    Alert.alert(
+      "Delete Property",
+      "Are you sure you want to delete this property? This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            notifyError("Delete functionality not yet implemented.");
+          },
+        },
+      ]
+    );
+  };
+
+  // --- renderItem ---
+  const renderItem = ({ item }) => {
+    const isSold = item.status === "sold";
+    const successLight = "rgba(40, 167, 69, 0.1)";
+    const dangerLight = "rgba(220, 53, 69, 0.1)";
+
+    return (
+      <View style={styles.card}>
+        <Pressable
+          onPress={() =>
+            navigation.navigate("PropertyDetails", { propertyId: item._id })
+          }
+        >
+          <Image
+            source={{
+              uri: toAbsoluteUrl(
+                item.thumbnail ||
+                  item.photos?.[0] ||
+                  "https://placehold.co/600x400?text=No+Image"
+              ),
+            }}
+            style={styles.cardImage}
+            {...(Platform.OS === "web" && { referrerPolicy: "no-referrer" })}
+          />
+        </Pressable>
+
+        <View style={styles.cardContent}>
+          <View>
+            <View style={styles.cardTopRow}>
+              <Text style={styles.cardTitle} numberOfLines={1}>
+                {item.propertyName}
+              </Text>
+              <View
+                style={[
+                  styles.statusBadge,
+                  {
+                    backgroundColor: isSold ? dangerLight : successLight,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.statusBadgeText,
+                    {
+                      color: isSold ? colors.dangerText : colors.successText,
+                    },
+                  ]}
+                >
+                  {isSold ? "Sold" : "Available"}
+                </Text>
+              </View>
+            </View>
+
+            {item.price ? (
+              <Text style={styles.cardPrice}>
+                {`₱${item.price.toLocaleString()}`}
+              </Text>
+            ) : null}
+
+            <Text style={styles.cardLocation} numberOfLines={1}>
+              {item.city}, {item.province}
+            </Text>
+          </View>
+
+          <View style={styles.cardActions}>
+            <Pressable
+              style={[styles.actionButton, styles.editButton]}
+              // --- MODIFIED: Pass the entire 'item' object ---
+              onPress={() => handleEditProperty(item)}
+            >
+              <Ionicons
+                name="create-outline"
+                size={16}
+                color={colors.primary}
+              />
+              <Text style={[styles.actionButtonText, { color: colors.primary }]}>
+                Edit
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.actionButton, styles.deleteButton]}
+              onPress={() => handleDeleteProperty(item._id)}
+            >
+              <Ionicons name="trash-outline" size={16} color={colors.danger} />
+              <Text style={[styles.actionButtonText, { color: colors.danger }]}>
+                Delete
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  // --- Main Component Return (Layout Unchanged) ---
   return (
     <View style={styles.container}>
       <Header navigation={navigation} title="Properties" />
 
-      {/* --- ADDED: Search Bar --- */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchWrapper}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by property name..."
-            placeholderTextColor={colors.textSecondary}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onSubmitEditing={handleSearchSubmit} // For keyboard "Enter"
-            returnKeyType="search"
-          />
-          {searchQuery.length > 0 && (
-            <Pressable onPress={handleSearchClear} style={styles.clearButton}>
-              <Text style={styles.clearButtonText}>✕</Text>
+      {/* Search & Filter Bar (Unchanged) */}
+      <View style={styles.searchSection}>
+        <View style={styles.searchAndFilterRow}>
+          <View style={styles.searchInputWrapper}>
+            <Pressable
+              onPress={handleSearchSubmit}
+              style={styles.searchIconLeft}
+            >
+              <Ionicons name="search" size={22} color={colors.textSecondary} />
             </Pressable>
-          )}
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search properties..."
+              placeholderTextColor={colors.textSecondary}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onSubmitEditing={handleSearchSubmit}
+              returnKeyType="search"
+            />
+          </View>
+          <Pressable
+            style={styles.filterToggleButton}
+            onPress={toggleFilterPanel}
+          >
+            <Ionicons
+              name={filtersVisible ? "close" : "filter-outline"}
+              size={24}
+              color={colors.primary}
+            />
+          </Pressable>
         </View>
-        <Pressable onPress={handleSearchSubmit} style={styles.searchButton}>
-          <Text style={styles.searchButtonText}>Search</Text>
-        </Pressable>
+
+        <View style={styles.badgeContainer}>
+          {filters.type ? (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{getTypeLabel(filters.type)}</Text>
+            </View>
+          ) : null}
+          {filters.province ? (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{filters.province}</Text>
+            </View>
+          ) : null}
+          {filters.city ? (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{filters.city}</Text>
+            </View>
+          ) : null}
+        </View>
       </View>
 
-      {/* Filter Buttons */}
-      <View style={styles.filterContainer}>
-        <Pressable
-          style={styles.filterButton}
-          onPress={() => openModal("type")}
-        >
-          <Text style={styles.filterButtonText} numberOfLines={1}>
-            {PROPERTY_TYPES.find((pt) => pt.value === filters.type)?.label ||
-              "Type"}
-          </Text>
-          <Text style={styles.filterIcon}>▼</Text>
-        </Pressable>
-        <Pressable
-          style={styles.filterButton}
-          onPress={() => openModal("province")}
-        >
-          <Text style={styles.filterButtonText} numberOfLines={1}>
-            {filters.province || "Province"}
-          </Text>
-          <Text style={styles.filterIcon}>▼</Text>
-        </Pressable>
-        <Pressable
-          style={[
-            styles.filterButton,
-            !filters.province && styles.filterButtonDisabled,
-          ]}
-          onPress={() => openModal("city")}
-          disabled={!filters.province || loadingCities}
-        >
-          <Text style={styles.filterButtonText} numberOfLines={1}>
-            {loadingCities ? "Loading..." : filters.city || "City"}
-          </Text>
-          <Text
-            style={[
-              styles.filterIcon,
-              (!filters.province || loadingCities) && { color: colors.gray },
-            ]}
+      {/* Collapsible Filter Panel (Unchanged) */}
+      {filtersVisible && (
+        <View style={styles.filterPanel}>
+          <Pressable
+            style={styles.filterButton}
+            onPress={() => openModal("type")}
           >
-            ▼
-          </Text>
-        </Pressable>
-      </View>
+            <Text style={styles.filterButtonText} numberOfLines={1}>
+              {PROPERTY_TYPES.find((pt) => pt.value === filters.type)?.label ||
+                "Select Type"}
+            </Text>
+            <Ionicons
+              name="chevron-down-outline"
+              size={18}
+              color={colors.textSecondary}
+            />
+          </Pressable>
+          <Pressable
+            style={styles.filterButton}
+            onPress={() => openModal("province")}
+          >
+            <Text style={styles.filterButtonText} numberOfLines={1}>
+              {filters.province || "Select Province"}
+            </Text>
+            <Ionicons
+              name="chevron-down-outline"
+              size={18}
+              color={colors.textSecondary}
+            />
+          </Pressable>
+          <Pressable
+            style={[
+              styles.filterButton,
+              !filters.province && styles.filterButtonDisabled,
+            ]}
+            onPress={() => openModal("city")}
+            disabled={!filters.province || loadingCities}
+          >
+            {/* --- FIX: Changed SmallText to Text --- */}
+            <Text style={styles.filterButtonText} numberOfLines={1}>
+              {loadingCities ? "Loading..." : filters.city || "Select City"}
+            </Text>
+            <Ionicons
+              name="chevron-down-outline"
+              size={18}
+              color={
+                !filters.province || loadingCities
+                  ? colors.gray
+                  : colors.textSecondary
+              }
+            />
+          </Pressable>
+          <Pressable
+            style={styles.clearFilterButton}
+            onPress={handleClearFilters}
+          >
+            <Text style={styles.clearFilterButtonText}>Clear All Filters</Text>
+          </Pressable>
+        </View>
+      )}
 
       {/* Property List */}
       {loading && !refreshing ? (
-        <ActivityIndicator
-          size="large"
-          color={colors.primary}
-          style={styles.loader}
-        />
+        <View style={styles.list}>
+          {[1, 2, 3, 4].map((n) => (
+            <View key={n} style={[styles.card, styles.placeholderCard]}>
+              <View
+                style={[
+                  styles.cardImage,
+                  styles.placeholderBox,
+                  { width: 90, height: 90 },
+                ]}
+              />
+              <View style={styles.placeholderContent}>
+                <View
+                  style={[
+                    styles.placeholderBox,
+                    { height: 18, width: "70%", marginBottom: 8 },
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.placeholderBox,
+                    { height: 16, width: "40%", marginBottom: 8 },
+                  ]}
+                />
+                <View
+                  style={[styles.placeholderBox, { height: 14, width: "50%" }]}
+                />
+              </View>
+            </View>
+          ))}
+        </View>
       ) : (
         <FlatList
           data={properties}
@@ -364,10 +513,10 @@ export default function PropertiesScreen() {
         />
       )}
 
-      {/* Add Property Button */}
+      {/* FAB (Unchanged) */}
       <FAB onPress={() => navigation.navigate("AddPropertyModal")} />
 
-      {/* Filter Modals */}
+      {/* Filter Modals (Unchanged logic) */}
       <PickerModal
         visible={modalVisible === "type"}
         options={PROPERTY_TYPES}
@@ -389,98 +538,139 @@ export default function PropertiesScreen() {
         onSelect={(val) => handleFilterChange("city", val)}
         title="Select City"
       />
+
+      {/* --- NEW: Add the EditPropertyModal here --- */}
+      <EditPropertyModal
+        visible={editModalVisible}
+        onClose={() => {
+          setEditModalVisible(false);
+          setSelectedProperty(null); // Clear selected property on close
+        }}
+        propertyData={selectedProperty}
+        onSave={handleEditSave}
+      />
     </View>
   );
 }
 
-// Styles
+// --- Stylesheet (Unchanged) ---
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.light },
   loader: { flex: 1, justifyContent: "center", alignItems: "center" },
-  // --- ADDED: Search Bar Styles ---
-  searchContainer: {
-    flexDirection: "row",
-    padding: 12,
+
+  searchSection: {
     backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    zIndex: 10,
+  },
+  searchAndFilterRow: {
+    flexDirection: "row",
     alignItems: "center",
   },
-  searchWrapper: {
+  searchInputWrapper: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: colors.light,
-    borderRadius: 8,
+    borderRadius: 12,
+    height: 48,
     borderWidth: 1,
     borderColor: colors.border,
   },
+  searchIconLeft: {
+    paddingLeft: 14,
+    paddingRight: 8,
+  },
   searchInput: {
     flex: 1,
-    height: 42,
-    paddingHorizontal: 12,
+    height: "100%",
     fontSize: 15,
     color: colors.text,
+    paddingRight: 16,
   },
-  clearButton: {
-    height: 42,
+  filterToggleButton: {
+    height: 48,
+    width: 48,
     justifyContent: "center",
-    paddingHorizontal: 10,
-    backgroundColor: "transparent",
+    alignItems: "center",
+    marginLeft: 12,
+    backgroundColor: colors.light,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  clearButtonText: {
-    color: colors.textSecondary,
-    fontSize: 16,
-  },
-  searchButton: {
-    marginLeft: 8,
-    backgroundColor: colors.primary,
-    paddingHorizontal: 12,
-    height: 44, // Match wrapper height + border
-    justifyContent: "center",
-    borderRadius: 8,
-  },
-  searchButtonText: {
-    color: colors.white,
-    fontWeight: "600",
-    fontSize: 15,
-  },
-  // --- End of Added Styles ---
-  filterContainer: {
+  badgeContainer: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 8,
+    flexWrap: "wrap",
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  badge: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: 20,
     paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  badgeText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  filterPanel: {
     backgroundColor: colors.white,
+    padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   filterButton: {
-    flex: 1,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     backgroundColor: colors.light,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginHorizontal: 4,
+    paddingHorizontal: 16,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
+    marginBottom: 12,
+    height: 48,
   },
   filterButtonText: {
     color: colors.text,
-    fontWeight: "600",
-    fontSize: 14,
-    flexShrink: 1,
-    marginRight: 4,
+    fontWeight: "500",
+    fontSize: 15,
   },
-  filterIcon: { fontSize: 10, color: colors.textSecondary },
   filterButtonDisabled: {
     backgroundColor: colors.gray,
     borderColor: colors.gray,
   },
-  list: { padding: 16 },
+  clearFilterButton: {
+    marginTop: 8,
+    padding: 12,
+    alignItems: "center",
+    borderRadius: 10,
+    backgroundColor: colors.light,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  clearFilterButtonText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+
+  // --- Property List & Card Styles ---
+  list: {
+    padding: 16,
+  },
   emptyText: {
     textAlign: "center",
     marginTop: 50,
@@ -488,40 +678,97 @@ const styles = StyleSheet.create({
     color: colors.gray,
   },
   card: {
+    flexDirection: "row",
     backgroundColor: colors.white,
     borderRadius: 12,
-    marginBottom: 20,
+    marginBottom: 16,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-    elevation: 2,
-    overflow: "hidden",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 5,
+    elevation: 3,
+    padding: 12,
   },
-  cardImage: { width: "100%", height: 180, backgroundColor: colors.light },
-  cardContent: { padding: 16 },
+  cardImage: {
+    width: 90,
+    height: 90,
+    borderRadius: 10,
+    backgroundColor: colors.light,
+  },
+  cardContent: {
+    flex: 1,
+    paddingLeft: 12,
+    justifyContent: "space-between",
+  },
+  cardTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 4,
+  },
   cardTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
+    flex: 1,
+    fontSize: 17,
+    fontWeight: "600",
+    color: colors.text,
+    marginRight: 8,
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  cardPrice: {
+    fontSize: 16,
+    fontWeight: "600",
     color: colors.text,
     marginBottom: 4,
   },
-  cardLocation: { fontSize: 13, color: colors.textSecondary, marginBottom: 8 },
-  cardPrice: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: colors.primary,
-    marginBottom: 4,
+  cardLocation: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginBottom: 10,
   },
-  cardStatus: { fontSize: 14, fontWeight: "600" },
-  featuredBadge: {
-    position: "absolute",
-    top: 10,
-    left: 10,
-    backgroundColor: "rgba(255, 215, 0, 0.9)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  cardActions: {
+    flexDirection: "row",
+    marginTop: 8,
+  },
+  actionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginRight: 8,
+  },
+  actionButtonText: {
+    marginLeft: 5,
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  editButton: {
+    borderColor: colors.border,
+  },
+  deleteButton: {
+    borderColor: colors.border,
+  },
+  // --- Placeholder Styles (UNCHANGED) ---
+  placeholderCard: {
+    flexDirection: "row",
+    padding: 12,
+  },
+  placeholderContent: {
+    flex: 1,
+    paddingLeft: 12,
+    justifyContent: "center",
+  },
+  placeholderBox: {
+    backgroundColor: colors.light,
     borderRadius: 6,
   },
-  featuredBadgeText: { color: colors.text, fontSize: 11, fontWeight: "bold" },
 });
