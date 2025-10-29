@@ -241,9 +241,9 @@ function UnitCard({ unit }) {
     lotArea = 0,
   } = specifications || {};
 
-  let unitTypeTitle = "Unit";
+  let unitTypeTitle = "";
   if (unitNumber) {
-    unitTypeTitle = `Unit ${unitNumber}`;
+    unitTypeTitle = ` ${unitNumber}`;
   } else if (bedrooms > 0) {
     unitTypeTitle = `${bedrooms} BR ${
       bathrooms > 0 ? `/ ${bathrooms} Bath` : ""

@@ -136,7 +136,7 @@ export default function UnitDetail() {
           <div className="flex items-center justify-between mt-4">
             <div>
               <h1 className="text-xl font-semibold">
-                {propertyInfo?.propertyName} - {unit.unitNumber || "Unit"}
+                {unit.unitNumber || "Unit"}
               </h1>
               {/* Location is here, below the unit name/title */}
               <div className="text-sm text-neutral-600">
