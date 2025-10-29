@@ -10,7 +10,7 @@ import {
 import { colors } from "../theme/colors";
 import { useAuth } from "../providers/AuthProvider";
 
-export default function LoginScreen() {
+export default function LoginScreen({ navigation }) {
   const { login } = useAuth();
   const [emailOrUsername, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -160,6 +160,13 @@ export default function LoginScreen() {
               {loading ? "Logging in..." : "Login Now"}
             </Text>
           </Pressable>
+
+          <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 12 }}>
+            <Text style={{ color: colors.muted, marginRight: 6 }}>Don't have an account?</Text>
+            <Pressable onPress={() => navigation.navigate('Register')}>
+              <Text style={{ color: colors.primary, fontWeight: '600' }}>Register</Text>
+            </Pressable>
+          </View>
         </View>
       </View>
     </KeyboardAvoidingView>

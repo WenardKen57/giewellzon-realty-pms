@@ -26,6 +26,7 @@ import {
 
 // Screens
 import LoginScreen from "../screens/LoginScreen";
+import RegisterScreen from "../screens/RegisterScreen";
 import OverviewScreen from "../screens/OverviewScreen";
 import PropertiesScreen from "../screens/PropertiesScreen";
 import PropertyDetailsScreen from "../screens/PropertyDetailsScreen";
@@ -220,7 +221,10 @@ export default function RootNavigator() {
             </Stack.Group>
           </>
         ) : (
-          <Stack.Screen name="Login" component={LoginScreen} />
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Register" component={RegisterScreen} />
+          </>
         )}
       </Stack.Navigator>
     </NavigationContainer>
