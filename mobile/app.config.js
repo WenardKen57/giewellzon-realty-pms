@@ -7,17 +7,17 @@ export default {
     scheme: "giewellzon",
     userInterfaceStyle: "light",
     // Link to your actual icon file
-    icon: "./assets/icon.png",
+    icon: "./assets/complogo.jpg",
     splash: {
       // Link to your actual splash image file
-      image: "./assets/splash-icon.png",
+      image: "./assets/complogo.jpg",
       resizeMode: "contain",
       backgroundColor: "#FFFFFF",
     },
     // Link to your actual adaptive icon file
     android: {
       adaptiveIcon: {
-        foregroundImage: "./assets/adaptive-icon.png",
+        foregroundImage: "./assets/complogo.jpg",
         backgroundColor: "#FFFFFF",
       },
       package: "com.yourcompany.giewellzonmobile", // Change if needed
@@ -28,7 +28,7 @@ export default {
     },
     web: {
       // Link to your actual favicon file
-      favicon: "./assets/favicon.png",
+      favicon: "./assets/complogo.jpg",
     },
     extra: {
       // Use EXPO_PUBLIC_API_BASE from .env, fallback to Render URL

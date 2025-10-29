@@ -32,13 +32,18 @@ function getSmtpTransporter() {
 }
 
 async function safeSend(options) {
-  const from = process.env.MAIL_FROM || 'no-reply@example.com';
+  // Prefer a SendGrid-specific sender if provided, otherwise fall back to MAIL_FROM
+  const from = process.env.SENDGRID_SENDER_EMAIL || process.env.MAIL_FROM || 'no-reply@example.com';
   const msg = { from, ...options };
 
   try {
     // 1) Prefer SendGrid in production (no SMTP ports needed)
     if (process.env.SENDGRID_API_KEY) {
       initSendGrid();
+      // Warn developers if SendGrid is enabled but the sender looks like a generic placeholder.
+      if (!process.env.SENDGRID_SENDER_EMAIL && (!process.env.MAIL_FROM || process.env.MAIL_FROM.includes('no-reply'))) {
+        console.warn('[MAIL] SENDGRID_API_KEY is set but no verified sender configured. Set SENDGRID_SENDER_EMAIL or MAIL_FROM to a verified sender.');
+      }
       const sgMsg = {
         to: msg.to,            // string or array
         from,                  // MUST be a verified sender in SendGrid
