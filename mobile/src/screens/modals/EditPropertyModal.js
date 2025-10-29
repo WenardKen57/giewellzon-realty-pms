@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from "react"; // Added useCallback
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   Modal,
   View,
@@ -19,12 +19,11 @@ import {
   uploadPhotos,
 } from "../../api/properties";
 import PickerModal from "../../components/PickerModal";
-// Removed getProvinces, getCities
 import { toAbsoluteUrl } from "../../api/client";
 import { notifyError, notifySuccess } from "../../utils/notify";
-import { Ionicons } from "@expo/vector-icons"; // Added Ionicons
+import { Ionicons } from "@expo/vector-icons";
 
-// Property Types for the Building/Complex itself
+// Property Types (Unchanged)
 const PROPERTY_TYPES = [
   "house",
   "condo",
@@ -35,43 +34,39 @@ const PROPERTY_TYPES = [
   "compound",
 ];
 
-export default function EditPropertyModal({ route, navigation }) {
-  const { property } = route.params;
-  const [step, setStep] = useState(0); // Simplified to 2 steps: Basic, Media
+export default function EditPropertyModal({
+  visible,
+  onClose,
+  onSave,
+  propertyData,
+}) {
+  const property = propertyData;
+
+  const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
 
-  // --- Form state aligned with Property model ---
   const [form, setForm] = useState({
     propertyName: property?.propertyName || "",
-    description: property?.description || "", // Keep description for building
+    description: property?.description || "",
     street: property?.street || "",
-    location: property?.location || "", // Additional location notes
-    city: property?.city || "", // Text input
-    province: property?.province || "", // Text input
-    propertyType: property?.propertyType || "house", // Type of building/complex
-    amenities: property?.amenities || [], // Keep building amenities
+    location: property?.location || "",
+    city: property?.city || "",
+    province: property?.province || "",
+    propertyType: property?.propertyType || "house",
+    amenities: property?.amenities || [],
     videoTours: property?.videoTours || [],
-    // Removed price, status, specifications, numberOfUnit, more
   });
 
-  // Previews for existing media
+  // (State for media, pickers, etc. - Unchanged)
   const [thumbPreview, setThumbPreview] = useState(property?.thumbnail || null);
   const [photosPreview, setPhotosPreview] = useState(property?.photos || []);
-
-  // New media to be uploaded
   const [newThumb, setNewThumb] = useState(null);
   const [newPhotos, setNewPhotos] = useState([]);
-
-  // --- Removed state for provinces, cities, pickers ---
-
   const [videoUrl, setVideoUrl] = useState("");
-  const [typePickerOpen, setTypePickerOpen] = useState(false); // Only type picker needed
-
-  // --- State for single amenity input ---
+  const [typePickerOpen, setTypePickerOpen] = useState(false);
   const [currentAmenity, setCurrentAmenity] = useState("");
-  // ------------------------------------
 
-  // Update form if property prop changes
+  // useEffect to update form (Unchanged)
   useEffect(() => {
     if (property) {
       setForm({
@@ -82,27 +77,25 @@ export default function EditPropertyModal({ route, navigation }) {
         city: property.city || "",
         province: property.province || "",
         propertyType: property.propertyType || "house",
-        amenities: property.amenities || [], // Ensure amenities are loaded
+        amenities: property.amenities || [],
         videoTours: property.videoTours || [],
       });
-      // Reset media previews based on initial property data
       setThumbPreview(property.thumbnail || null);
       setPhotosPreview(property.photos || []);
-      // Clear any newly selected files from previous edits
       setNewThumb(null);
       setNewPhotos([]);
-      setCurrentAmenity(""); // Clear amenity input on open/change
+      setCurrentAmenity("");
+      setStep(0);
     }
   }, [property]);
 
-  // Basic validation for the first step
+  // Validation (Unchanged)
   const canNextBasic = useMemo(
-    // Description is optional, main required fields are name, province, city
     () => form.propertyName && form.province && form.city,
     [form]
   );
 
-  // --- Image Picker Functions ---
+  // Image Picker Functions (Unchanged)
   async function pickThumb() {
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -111,14 +104,13 @@ export default function EditPropertyModal({ route, navigation }) {
     if (!res.canceled && res.assets && res.assets.length > 0) {
       const asset = res.assets[0];
       setNewThumb({
-        // Store the selected file object
         uri: asset.uri,
         name:
           asset.fileName ||
           `thumbnail.${asset.mimeType.split("/")[1] || "jpg"}`,
         type: asset.mimeType,
       });
-      setThumbPreview(asset.uri); // Update preview to show the local file URI
+      setThumbPreview(asset.uri);
     }
   }
 
@@ -136,28 +128,24 @@ export default function EditPropertyModal({ route, navigation }) {
           `photo_${i}.${asset.mimeType.split("/")[1] || "jpg"}`,
         type: asset.mimeType,
       }));
-      setNewPhotos(selectedAssets); // Store the array of selected file objects
-      // Update preview to show new local images (map URIs for display)
-      setPhotosPreview(selectedAssets.map((a) => a.uri)); // Store URIs for preview
+      setNewPhotos(selectedAssets);
+      setPhotosPreview(selectedAssets.map((a) => a.uri));
     }
   }
 
-  // --- Video URL Function ---
+  // Video URL Function (Unchanged)
   function addVideo() {
     const v = videoUrl.trim();
     if (v && !form.videoTours.includes(v)) {
-      // Prevent duplicates
       setForm((s) => ({ ...s, videoTours: [...(s.videoTours || []), v] }));
       setVideoUrl("");
     } else if (!v) {
-      // notifyError("Video URL cannot be empty.");
     } else {
-      // notifyError("Video URL already added.");
-      setVideoUrl(""); // Still clear input
+      setVideoUrl("");
     }
   }
 
-  // --- Amenity Functions ---
+  // Amenity Functions (Unchanged)
   const handleAddAmenity = useCallback(() => {
     const trimmedAmenity = currentAmenity.trim();
     if (trimmedAmenity && !form.amenities.includes(trimmedAmenity)) {
@@ -167,9 +155,8 @@ export default function EditPropertyModal({ route, navigation }) {
       }));
       setCurrentAmenity("");
     } else if (!trimmedAmenity) {
-      /* Optional notification */
     } else {
-      /* Optional notification */ setCurrentAmenity("");
+      setCurrentAmenity("");
     }
   }, [currentAmenity, form.amenities]);
 
@@ -181,11 +168,10 @@ export default function EditPropertyModal({ route, navigation }) {
       ),
     }));
   }, []);
-  // -------------------------
 
-  // --- Save Function ---
+  // Save Function (Unchanged)
   async function save() {
-    // Basic validation
+    if (!property) return;
     if (!form.propertyName || !form.province || !form.city) {
       notifyError(
         "Please fill in Property Name, Province, and City (*) on the Basic Info tab."
@@ -193,10 +179,8 @@ export default function EditPropertyModal({ route, navigation }) {
       setStep(0);
       return;
     }
-
     setSaving(true);
     try {
-      // Payload contains only valid Property fields
       const payload = {
         propertyName: form.propertyName,
         description: form.description,
@@ -204,24 +188,19 @@ export default function EditPropertyModal({ route, navigation }) {
         location: form.location,
         city: form.city,
         province: form.province,
-        amenities: form.amenities, // Send updated amenities
-        videoTours: form.videoTours, // Send updated video tours
+        amenities: form.amenities,
+        videoTours: form.videoTours,
         propertyType: form.propertyType,
       };
-      // Removed unit-specific fields
-
       await updateProperty(property._id, payload);
-
-      // Upload media ONLY if new files were selected
       if (newThumb) {
         await uploadThumbnail(property._id, newThumb);
       }
       if (newPhotos.length) {
-        await uploadPhotos(property._id, newPhotos); // Assumes API replaces photos
+        await uploadPhotos(property._id, newPhotos);
       }
-
       notifySuccess("Property updated successfully!");
-      navigation.goBack();
+      onSave();
     } catch (e) {
       notifyError(e?.response?.data?.message || "Failed to update property");
     } finally {
@@ -231,25 +210,32 @@ export default function EditPropertyModal({ route, navigation }) {
 
   return (
     <Modal
-      visible={true}
+      visible={visible}
       animationType="slide"
       transparent
-      onRequestClose={() => navigation.goBack()}
+      onRequestClose={onClose}
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
+          {/* --- MODIFIED: Added Close Button --- */}
+          <Pressable onPress={onClose} style={styles.closeButton}>
+            <Ionicons name="close-outline" size={28} color={colors.muted} />
+          </Pressable>
+
           <Text style={styles.modalTitle}>
             Edit Property (Building/Complex)
           </Text>
-          {/* Simplified Stepper */}
+
+          {/* --- MODIFIED: Polished Stepper/Tabs --- */}
           <View style={styles.stepper}>
             {["Basic", "Media"].map((t, i) => (
-              <Text
-                key={t}
-                style={[styles.stepText, i === step && styles.stepTextActive]}
-              >
-                {t}
-              </Text>
+              <Pressable key={t} onPress={() => setStep(i)}>
+                <Text
+                  style={[styles.stepText, i === step && styles.stepTextActive]}
+                >
+                  {t}
+                </Text>
+              </Pressable>
             ))}
           </View>
 
@@ -266,7 +252,6 @@ export default function EditPropertyModal({ route, navigation }) {
                     placeholder="e.g., The Grand Residences"
                   />
                 </L>
-                {/* Kept description for building */}
                 <L label="Description (About the building/complex)">
                   <T
                     value={form.description}
@@ -295,24 +280,27 @@ export default function EditPropertyModal({ route, navigation }) {
                     placeholder="e.g., 123 Main St"
                   />
                 </L>
-                {/* Province Input */}
-                <L label="Province*">
-                  <T
-                    value={form.province}
-                    onChangeText={(v) =>
-                      setForm((s) => ({ ...s, province: v }))
-                    }
-                    placeholder="Enter province name"
-                  />
-                </L>
-                {/* City Input */}
-                <L label="City*">
-                  <T
-                    value={form.city}
-                    onChangeText={(v) => setForm((s) => ({ ...s, city: v }))}
-                    placeholder="Enter city name"
-                  />
-                </L>
+
+                {/* --- MODIFIED: Grouped Province/City --- */}
+                <View style={styles.formRow}>
+                  <L label="Province*" style={styles.formRowItem}>
+                    <T
+                      value={form.province}
+                      onChangeText={(v) =>
+                        setForm((s) => ({ ...s, province: v }))
+                      }
+                      placeholder="Enter province"
+                    />
+                  </L>
+                  <L label="City*" style={styles.formRowItem}>
+                    <T
+                      value={form.city}
+                      onChangeText={(v) => setForm((s) => ({ ...s, city: v }))}
+                      placeholder="Enter city"
+                    />
+                  </L>
+                </View>
+
                 <L label="Additional location details (optional)">
                   <T
                     value={form.location}
@@ -322,16 +310,16 @@ export default function EditPropertyModal({ route, navigation }) {
                     placeholder="Village/Barangay or specific notes"
                   />
                 </L>
-                {/* Amenities Input */}
                 <L label="Building Amenities">
                   <View style={styles.amenityInputContainer}>
                     <T
                       style={styles.amenityInput}
                       value={currentAmenity}
                       onChangeText={setCurrentAmenity}
-                      placeholder="Type amenity and press Add"
+                      placeholder="Type amenity and press +"
                       onSubmitEditing={handleAddAmenity}
                     />
+                    {/* --- MODIFIED: Icon Button --- */}
                     <Pressable
                       style={[
                         styles.addButton,
@@ -340,7 +328,11 @@ export default function EditPropertyModal({ route, navigation }) {
                       onPress={handleAddAmenity}
                       disabled={!currentAmenity.trim()}
                     >
-                      <Text style={styles.addButtonText}>Add</Text>
+                      <Ionicons
+                        name="add-outline"
+                        size={24}
+                        color={colors.white}
+                      />
                     </Pressable>
                   </View>
                   <View style={styles.amenitiesList}>
@@ -375,12 +367,11 @@ export default function EditPropertyModal({ route, navigation }) {
                 <Text style={styles.infoText}>
                   Update photos/videos for the overall property.
                 </Text>
-                {/* Thumbnail Input */}
                 <L label="Current Thumbnail">
                   <Pressable onPress={pickThumb} style={styles.imagePicker}>
                     {thumbPreview ? (
                       <Image
-                        source={{ uri: toAbsoluteUrl(thumbPreview) }} // Handles both local URI and remote URL
+                        source={{ uri: toAbsoluteUrl(thumbPreview) }}
                         style={styles.previewImage}
                         {...(Platform.OS === "web" && {
                           referrerPolicy: "no-referrer",
@@ -394,7 +385,6 @@ export default function EditPropertyModal({ route, navigation }) {
                     <Text style={styles.infoTextSm}>New: {newThumb.name}</Text>
                   )}
                 </L>
-                {/* Photos Input */}
                 <L label="Current Photos">
                   <Pressable
                     onPress={pickPhotos}
@@ -403,11 +393,10 @@ export default function EditPropertyModal({ route, navigation }) {
                     <Text>Click to select new photos (replaces all)</Text>
                   </Pressable>
                   <ScrollView horizontal style={styles.photosContainer}>
-                    {/* Map over photosPreview which now holds URIs or original URLs */}
                     {photosPreview.map((photoUrl, index) => (
                       <Image
-                        key={photoUrl + index} // Use index if URLs aren't unique enough temporarily
-                        source={{ uri: toAbsoluteUrl(photoUrl) }} // Handles both local/remote
+                        key={photoUrl + index}
+                        source={{ uri: toAbsoluteUrl(photoUrl) }}
                         style={styles.previewImageSmall}
                         {...(Platform.OS === "web" && {
                           referrerPolicy: "no-referrer",
@@ -420,26 +409,35 @@ export default function EditPropertyModal({ route, navigation }) {
                     existing on save)
                   </Text>
                 </L>
-                {/* Video URLs Input */}
+
+                {/* --- MODIFIED: Consistent Video URL Input --- */}
                 <L label="Video Tour URLs (YouTube/Vimeo)">
-                  <T
-                    value={videoUrl}
-                    onChangeText={setVideoUrl}
-                    placeholder="Add a new video URL..."
-                  />
+                  <View style={styles.amenityInputContainer}>
+                    <T
+                      style={styles.amenityInput}
+                      value={videoUrl}
+                      onChangeText={setVideoUrl}
+                      placeholder="Paste a new video URL and press +"
+                      onSubmitEditing={addVideo}
+                    />
+                    <Pressable
+                      onPress={addVideo}
+                      disabled={!videoUrl.trim()}
+                      style={[
+                        styles.addButton,
+                        !videoUrl.trim() && styles.addButtonDisabled,
+                      ]}
+                    >
+                      <Ionicons
+                        name="add-outline"
+                        size={24}
+                        color={colors.white}
+                      />
+                    </Pressable>
+                  </View>
                 </L>
-                <Pressable
-                  onPress={addVideo}
-                  disabled={!videoUrl}
-                  style={[
-                    styles.button,
-                    styles.buttonSmall,
-                    { alignSelf: "flex-start", opacity: videoUrl ? 1 : 0.5 },
-                  ]}
-                >
-                  <Text style={styles.buttonText}>Add Video URL</Text>
-                </Pressable>
-                {/* Display current video URLs - Simple list */}
+                {/* --- (Old separate button removed) --- */}
+
                 {form.videoTours && form.videoTours.length > 0 && (
                   <View style={{ marginTop: 10 }}>
                     <Text style={styles.infoTextSm}>Current Video URLs:</Text>
@@ -451,45 +449,51 @@ export default function EditPropertyModal({ route, navigation }) {
                       >
                         • {url}
                       </Text>
-                      // TODO: Add a remove button per URL
                     ))}
                   </View>
                 )}
               </View>
             )}
-            {/* Steps 2 & 3 Removed */}
           </ScrollView>
 
           {/* --- Navigation --- */}
           <View style={styles.navigation}>
             <Pressable
-              onPress={() =>
-                step === 0 ? navigation.goBack() : setStep((s) => s - 1)
-              }
-              style={[styles.button, styles.buttonOutline]}
+              onPress={() => (step === 0 ? onClose() : setStep((s) => s - 1))}
+              // --- MODIFIED: Added pressed state ---
+              style={({ pressed }) => [
+                styles.button,
+                styles.buttonOutline,
+                pressed && styles.buttonPressed,
+              ]}
             >
               <Text style={styles.buttonOutlineText}>
                 {step === 0 ? "Cancel" : "Back"}
               </Text>
             </Pressable>
-            {/* Show Next if not on last step (step 1) */}
             {step < 1 ? (
               <Pressable
                 onPress={() => setStep((s) => s + 1)}
                 disabled={step === 0 && !canNextBasic}
-                style={[
+                // --- MODIFIED: Added pressed state ---
+                style={({ pressed }) => [
                   styles.button,
                   step === 0 && !canNextBasic && styles.buttonDisabled,
+                  pressed && styles.buttonPressed,
                 ]}
               >
                 <Text style={styles.buttonText}>Next</Text>
               </Pressable>
             ) : (
-              // Show Save on last step (step 1)
               <Pressable
                 onPress={save}
                 disabled={saving}
-                style={[styles.button, saving && styles.buttonDisabled]}
+                // --- MODIFIED: Added pressed state ---
+                style={({ pressed }) => [
+                  styles.button,
+                  saving && styles.buttonDisabled,
+                  pressed && styles.buttonPressed,
+                ]}
               >
                 {saving ? (
                   <ActivityIndicator size="small" color="#fff" />
@@ -502,7 +506,7 @@ export default function EditPropertyModal({ route, navigation }) {
         </View>
       </View>
 
-      {/* --- Pickers --- */}
+      {/* --- Pickers (Unchanged) --- */}
       <PickerModal
         visible={typePickerOpen}
         onClose={() => setTypePickerOpen(false)}
@@ -517,7 +521,6 @@ export default function EditPropertyModal({ route, navigation }) {
           setTypePickerOpen(false);
         }}
       />
-      {/* Removed Province/City Pickers */}
     </Modal>
   );
 }
@@ -531,10 +534,14 @@ function L({ label, children, style }) {
     </View>
   );
 }
+
+// --- MODIFIED: T component with focus state ---
 function T(props) {
+  const [isFocused, setIsFocused] = useState(false); // ADDED
   const baseStyle = [
     styles.textInputBase,
     props.multiline && styles.textInputMultiline,
+    isFocused && styles.textInputFocused, // ADDED
   ];
   return (
     <TextInput
@@ -542,11 +549,21 @@ function T(props) {
       placeholderTextColor="#6B7280"
       underlineColorAndroid="transparent"
       style={[baseStyle, props.style]}
+      onFocus={(e) => {
+        // ADDED
+        setIsFocused(true);
+        if (props.onFocus) props.onFocus(e);
+      }}
+      onBlur={(e) => {
+        // ADDED
+        setIsFocused(false);
+        if (props.onBlur) props.onBlur(e);
+      }}
     />
   );
 }
 
-// --- Styles ---
+// --- Styles (MODIFIED) ---
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
@@ -560,26 +577,48 @@ const styles = StyleSheet.create({
     padding: 16,
     maxHeight: "90%",
   },
+  // --- ADDED: Close button ---
+  closeButton: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    padding: 6,
+    zIndex: 1,
+  },
   modalTitle: {
     fontWeight: "700",
     fontSize: 18,
     textAlign: "center",
     color: colors.text,
     marginBottom: 5,
+    paddingTop: 10, // Added padding for close button
   },
+  // --- MODIFIED: Stepper/Tabs ---
   stepper: {
     flexDirection: "row",
-    justifyContent: "center",
-    gap: 12,
+    justifyContent: "flex-start",
+    gap: 20,
     marginVertical: 12,
-    paddingBottom: 10,
+    paddingHorizontal: 4,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  stepText: { color: colors.muted, fontWeight: "500" },
-  stepTextActive: { color: colors.primary, fontWeight: "700" },
+  stepText: {
+    color: colors.muted,
+    fontWeight: "500",
+    fontSize: 15,
+    paddingBottom: 10,
+  },
+  stepTextActive: {
+    color: colors.primary,
+    fontWeight: "700",
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
+  },
+  // ---
   formContainer: { maxHeight: "70%", paddingBottom: 20 },
-  stepView: { gap: 12, paddingHorizontal: 4, paddingBottom: 16 },
+  // --- MODIFIED: Removed gap, using marginBottom on L ---
+  stepView: { paddingHorizontal: 4, paddingBottom: 16 },
   navigation: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -604,17 +643,25 @@ const styles = StyleSheet.create({
   },
   buttonOutlineText: { color: colors.text, fontWeight: "600" },
   buttonDisabled: { backgroundColor: colors.gray, opacity: 0.7 },
+  // --- ADDED: Pressed state ---
+  buttonPressed: {
+    opacity: 0.8,
+  },
   buttonSmall: { paddingVertical: 8, paddingHorizontal: 12 },
-  labelContainer: { marginBottom: 0 },
+  // --- MODIFIED: Added marginBottom ---
+  labelContainer: {
+    marginBottom: 16,
+  },
   labelText: {
     color: "#6B7280",
     fontSize: 13,
     marginBottom: 4,
     fontWeight: "500",
   },
+  // --- MODIFIED: Unified border color ---
   textInputBase: {
     borderWidth: 1,
-    borderColor: "#D9D9D9",
+    borderColor: colors.border, // Changed from #D9D9D9
     borderRadius: 8,
     paddingHorizontal: 12,
     backgroundColor: "#fff",
@@ -627,15 +674,34 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
     height: "auto",
   },
+  // --- ADDED: Focus style ---
+  textInputFocused: {
+    borderColor: colors.primary,
+    borderWidth: 1,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  // --- MODIFIED: Unified border color ---
   pickerButton: {
     borderWidth: 1,
-    borderColor: "#D9D9D9",
+    borderColor: colors.border, // Changed from #D9D9D9
     borderRadius: 8,
     padding: 10,
     height: 44,
     justifyContent: "center",
     backgroundColor: "#fff",
   },
+  // --- ADDED: Form Row styles ---
+  formRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  formRowItem: {
+    flex: 1,
+  },
+  // --- (Image/Media styles unchanged) ---
   infoText: { color: colors.muted, fontSize: 13, marginBottom: 4 },
   infoTextSm: { color: colors.muted, fontSize: 12, marginTop: 2 },
   imagePicker: {
@@ -658,7 +724,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
     backgroundColor: colors.light,
   },
-  // --- Amenity Input Styles ---
+  // --- (Amenity styles modified) ---
   amenityInputContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -667,22 +733,20 @@ const styles = StyleSheet.create({
   amenityInput: {
     flex: 1,
   },
+  // --- MODIFIED: Icon button style ---
   addButton: {
     backgroundColor: colors.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 8,
+    width: 44,
     height: 44,
+    borderRadius: 8,
     justifyContent: "center",
+    alignItems: "center",
   },
   addButtonDisabled: {
     backgroundColor: colors.muted,
     opacity: 0.7,
   },
-  addButtonText: {
-    color: colors.white,
-    fontWeight: "600",
-  },
+  // --- (Removed addButtonText) ---
   amenitiesList: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -713,5 +777,4 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontStyle: "italic",
   },
-  // -------------------------
 });

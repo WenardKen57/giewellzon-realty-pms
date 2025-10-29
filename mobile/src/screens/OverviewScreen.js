@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -154,7 +154,9 @@ const InquiryCard = ({ item, navigation }) => {
         </Text>
       </View>
       <Text style={styles.inquiryTimestamp}>
-        {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "No date"}
+        {item.createdAt
+          ? new Date(item.createdAt).toLocaleDateString()
+          : "No date"}
       </Text>
     </Pressable>
   );
@@ -214,13 +216,13 @@ export default function OverviewScreen() {
         await Promise.all([
           getDashboardAnalytics(),
           getFeaturedProperties(5),
-          getRecentSales(5),
-          getRecentInquiries(5),
+          getRecentSales(5), // This fetches your sales data
+          getRecentInquiries(5), // This fetches your inquiries data
         ]);
       setStats(statsData);
       setFeatured(featuredData || []);
-      setRecentSales(salesData || []);
-      setRecentInquiries(inquiriesData || []);
+      setRecentSales(salesData || []); // This sets your sales state
+      setRecentInquiries(inquiriesData || []); // This sets your inquiries state
       fadeIn();
     } catch (error) {
       notifyError("Failed to load dashboard data.");
@@ -368,11 +370,28 @@ export default function OverviewScreen() {
               )}
             </Animated.View>
 
+            {/* --- 🚀 RECENT SALES SECTION MODIFIED --- */}
             <Animated.View style={[styles.section, { opacity: fadeAnim4 }]}>
-              <Text style={styles.sectionTitle}>Recent Sales</Text>
-              <Text style={styles.sectionSubtitle}>
-                A glimpse of your latest closed deals.
-              </Text>
+              <View style={styles.sectionHeaderRow}>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={styles.sectionTitle}>Recent Sales</Text>
+                  <Text style={styles.sectionSubtitle}>
+                    A glimpse of your latest closed deals.
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => navigation.navigate("Sales")}
+                  style={styles.viewAllButton}
+                >
+                  <Text style={styles.viewAllText}>View All</Text>
+                  <Ionicons
+                    name="chevron-forward-outline"
+                    size={16}
+                    color={colors.primary}
+                  />
+                </Pressable>
+              </View>
+
               {recentSales.length === 0 ? (
                 <View style={styles.emptyContainer}>
                   <Ionicons
@@ -392,11 +411,28 @@ export default function OverviewScreen() {
               )}
             </Animated.View>
 
+            {/* --- 🚀 RECENT INQUIRIES SECTION MODIFIED --- */}
             <Animated.View style={[styles.section, { opacity: fadeAnim5 }]}>
-              <Text style={styles.sectionTitle}>Recent Inquiries</Text>
-              <Text style={styles.sectionSubtitle}>
-                Stay updated with the latest customer interests.
-              </Text>
+              <View style={styles.sectionHeaderRow}>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={styles.sectionTitle}>Recent Inquiries</Text>
+                  <Text style={styles.sectionSubtitle}>
+                    Stay updated with the latest customer interests.
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => navigation.navigate("Inquiries")}
+                  style={styles.viewAllButton}
+                >
+                  <Text style={styles.viewAllText}>View All</Text>
+                  <Ionicons
+                    name="chevron-forward-outline"
+                    size={16}
+                    color={colors.primary}
+                  />
+                </Pressable>
+              </View>
+
               {recentInquiries.length === 0 ? (
                 <View style={styles.emptyContainer}>
                   <Ionicons
@@ -433,11 +469,50 @@ const styles = StyleSheet.create({
   section: { marginBottom: 24, paddingHorizontal: 20 },
   // 🎨 This View provides padding for titles *outside* the carousel
   sectionHeader: { paddingHorizontal: 20 },
-  // 🎨 Adjusted title/subtitle spacing
-  sectionTitle: { fontSize: 20, fontWeight: "bold", color: colors.text, marginBottom: 8 },
-  sectionSubtitle: { fontSize: 14, color: colors.textSecondary, marginBottom: 16, marginTop: -4 },
-  sectionCaption: { fontSize: 13, color: colors.textSecondary, textAlign: "center", marginTop: 8 },
-  statsGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
+
+  // --- 🚀 NEW/MODIFIED STYLES ---
+  sectionHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16, // Replaces subtitle margin
+  },
+  viewAllButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 4,
+  },
+  viewAllText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.primary,
+    marginRight: 2,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: colors.text,
+    marginBottom: 4, // Adjusted from 8
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 0, // Adjusted from 16
+    marginTop: 0, // Adjusted from -4
+  },
+  // --- END OF NEW/MODIFIED STYLES ---
+
+  sectionCaption: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: "center",
+    marginTop: 8,
+  },
+  statsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
   statCard: {
     backgroundColor: colors.white,
     borderRadius: 16,
@@ -466,8 +541,18 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
   },
   statInfo: { flexShrink: 1 },
-  statValue: { fontSize: 18, fontWeight: "bold", color: colors.text, flexShrink: 1 },
-  statTitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2, flexShrink: 1 },
+  statValue: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: colors.text,
+    flexShrink: 1,
+  },
+  statTitle: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+    flexShrink: 1,
+  },
   quickLinksGrid: { flexDirection: "row", justifyContent: "space-between" },
   // 🎨 QuickLinkCard styles updated
   quickLinkCard: {
@@ -483,14 +568,34 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 2,
   },
-  quickLinkTitle: { 
-    fontSize: 14, 
-    fontWeight: "600", 
+  quickLinkTitle: {
+    fontSize: 14,
+    fontWeight: "600",
     marginTop: 10, // More spacing
   },
-  emptyContainer: { alignItems: "center", paddingVertical: 40, backgroundColor: colors.white, borderRadius: 16, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5, },
-  emptyTitle: { fontSize: 16, fontWeight: "600", color: colors.text, marginTop: 12 },
-  emptyText: { fontSize: 13, color: colors.textSecondary, marginTop: 4, textAlign: "center", paddingHorizontal: 20 },
+  emptyContainer: {
+    alignItems: "center",
+    paddingVertical: 40,
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.text,
+    marginTop: 12,
+  },
+  emptyText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginTop: 4,
+    textAlign: "center",
+    paddingHorizontal: 20,
+  },
   // 🎨 Carousel container now starts from the edge
   carouselContainer: { paddingVertical: 8, paddingHorizontal: 20 },
   propertyCard: {
@@ -505,28 +610,122 @@ const styles = StyleSheet.create({
     elevation: 4,
     backgroundColor: colors.border,
   },
-  propertyCardImage: { width: "100%", height: "100%", justifyContent: "flex-end" },
-  propertyCardOverlay: { padding: 12, borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
-  propertyCardTitle: { fontSize: 15, fontWeight: "bold", color: colors.white, marginBottom: 2 },
+  propertyCardImage: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "flex-end",
+  },
+  propertyCardOverlay: {
+    padding: 12,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+  },
+  propertyCardTitle: {
+    fontSize: 15,
+    fontWeight: "bold",
+    color: colors.white,
+    marginBottom: 2,
+  },
   propertyCardLocation: { fontSize: 12, color: "rgba(255, 255, 255, 0.8)" },
 
   // Sales Card Styles
-  saleCard: { flexDirection: "row", alignItems: "center", backgroundColor: colors.white, borderRadius: 12, padding: 12, marginBottom: 12, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 5, elevation: 2, },
-  saleCardImage: { width: 50, height: 50, borderRadius: 8, marginRight: 12, backgroundColor: colors.border },
+  saleCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  saleCardImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 8,
+    marginRight: 12,
+    backgroundColor: colors.border,
+  },
   saleCardInfo: { flex: 1, marginRight: 8 },
   saleCardProperty: { fontSize: 15, fontWeight: "bold", color: colors.text },
   saleCardBuyer: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
-  saleCardAmount: { fontSize: 14, fontWeight: "600", color: colors.success, marginTop: 2 },
-  saleCardDate: { fontSize: 12, color: colors.textSecondary, marginLeft: "auto", alignSelf: "flex-start" },
+  saleCardAmount: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.success,
+    marginTop: 2,
+  },
+  saleCardDate: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginLeft: "auto",
+    alignSelf: "flex-start",
+  },
 
   // Inquiry Card Styles
-  inquiryCard: { flexDirection: "row", alignItems: "flex-start", backgroundColor: colors.white, borderRadius: 12, padding: 12, marginBottom: 12, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 5, elevation: 2, },
-  inquiryAvatar: { width: 44, height: 44, borderRadius: 22, justifyContent: "center", alignItems: "center", marginRight: 12, backgroundColor: colors.light },
+  inquiryCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  inquiryAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+    backgroundColor: colors.light,
+  },
   inquiryInfo: { flex: 1, marginRight: 8 },
-  inquiryHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 2 },
-  inquiryName: { fontSize: 15, fontWeight: "bold", color: colors.text, flexShrink: 1 },
-  inquiryStatus: { fontSize: 12, fontWeight: "600", marginLeft: 8, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, overflow: "hidden" },
-  inquiryMessage: { fontSize: 13, color: colors.textSecondary, marginTop: 2, lineHeight: 18 },
-  inquiryProperty: { fontSize: 12, color: colors.primary, fontStyle: "italic", marginTop: 4 },
-  inquiryTimestamp: { fontSize: 12, color: colors.textSecondary, marginLeft: "auto", alignSelf: "flex-start" },
+  inquiryHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 2,
+  },
+  inquiryName: {
+    fontSize: 15,
+    fontWeight: "bold",
+    color: colors.text,
+    flexShrink: 1,
+  },
+  inquiryStatus: {
+    fontSize: 12,
+    fontWeight: "600",
+    marginLeft: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    overflow: "hidden",
+  },
+  inquiryMessage: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  inquiryProperty: {
+    fontSize: 12,
+    color: colors.primary,
+    fontStyle: "italic",
+    marginTop: 4,
+  },
+  inquiryTimestamp: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginLeft: "auto",
+    alignSelf: "flex-start",
+  },
 });
