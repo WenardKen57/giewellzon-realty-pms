@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from "react"; // Added useCallback
+import * as ImagePicker from "expo-image-picker";
 import {
   Modal,
   View,
@@ -8,10 +9,12 @@ import {
   ScrollView,
   StyleSheet,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons"; // Import icons
 import { colors } from "../../theme/colors";
-import { createUnit } from "../../api/properties"; // Use the new API function
+import { createUnit, uploadUnitPhotos } from "../../api/properties"; // Use the new API function
+
 import { notifyError, notifySuccess } from "../../utils/notify";
 import PickerModal from "../../components/PickerModal"; // Re-use PickerModal
 
@@ -22,24 +25,42 @@ const UNIT_STATUS_OPTIONS = [
 ];
 
 export default function AddUnitModal({ route, navigation }) {
-  const { propertyId } = route.params; // Get propertyId passed during navigation
+  // --- Pick images for unit ---
+  async function pickPhotos() {
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      quality: 0.85,
+      selectionLimit: 10,
+    });
+    if (!res.canceled && res.assets && res.assets.length > 0) {
+      const newPhotos = res.assets.map((asset) => ({
+        uri: asset.uri,
+        name: asset.fileName || `unitphoto.${asset.mimeType?.split("/")[1] || "jpg"}`,
+        type: asset.mimeType || "image/jpeg",
+      }));
+      setPhotos((prev) => [...prev, ...newPhotos]);
+    }
+  }
+
+  // --- Remove a photo ---
+  function removePhoto(idx) {
+    setPhotos((prev) => prev.filter((_, i) => i !== idx));
+  }
+  const { propertyId } = route.params;
   const [saving, setSaving] = useState(false);
   const [statusPickerOpen, setStatusPickerOpen] = useState(false);
-
   const [form, setForm] = useState({
-    unitNumber: "", // e.g., "Apt 101", "Unit B", "Main House"
+    unitNumber: "",
     price: "",
     status: "available",
     specifications: { floorArea: "", bedrooms: "", bathrooms: "" },
-    description: "", // Add description state
-    amenities: [], // Add amenities state
+    description: "",
+    amenities: [],
   });
-
-  // --- State for single amenity input ---
   const [currentAmenity, setCurrentAmenity] = useState("");
-  // ------------------------------------------
+  const [photos, setPhotos] = useState([]);
 
-  // --- Function to add amenity ---
   const handleAddAmenity = useCallback(() => {
     const trimmedAmenity = currentAmenity.trim();
     if (trimmedAmenity && !form.amenities.includes(trimmedAmenity)) {
@@ -47,39 +68,31 @@ export default function AddUnitModal({ route, navigation }) {
         ...prevForm,
         amenities: [...prevForm.amenities, trimmedAmenity],
       }));
-      setCurrentAmenity(""); // Clear input after adding
+      setCurrentAmenity("");
     } else if (!trimmedAmenity) {
-      // Optional notification for empty input
       // notifyError("Amenity cannot be empty.");
     } else {
-      // Optional notification if amenity already exists
       // notifyError(`"${trimmedAmenity}" has already been added.`);
-      setCurrentAmenity(""); // Still clear input
+      setCurrentAmenity("");
     }
   }, [currentAmenity, form.amenities]);
-  // ------------------------------------
 
-  // --- Function to remove amenity ---
   const handleRemoveAmenity = useCallback((amenityToRemove) => {
     setForm((prevForm) => ({
       ...prevForm,
-      amenities: prevForm.amenities.filter(
-        (amenity) => amenity !== amenityToRemove
-      ),
+      amenities: prevForm.amenities.filter((amenity) => amenity !== amenityToRemove),
     }));
   }, []);
-  // ---------------------------------------
 
   async function save() {
     if (!form.unitNumber || !form.price) {
-      // Added price validation
       notifyError("Unit Number and Price are required (*).");
       return;
     }
     setSaving(true);
     try {
       const payload = {
-        ...form, // Includes description and amenities array
+        ...form,
         price: Number(form.price || 0),
         specifications: {
           floorArea: Number(form.specifications.floorArea || 0),
@@ -87,15 +100,20 @@ export default function AddUnitModal({ route, navigation }) {
           bathrooms: Number(form.specifications.bathrooms || 0),
         },
       };
-      await createUnit(propertyId, payload); // Pass propertyId and payload
+      const created = await createUnit(propertyId, payload);
+      if (created && created._id && photos.length > 0) {
+        await uploadUnitPhotos(created._id, photos);
+      }
       notifySuccess("Unit added successfully!");
-      navigation.goBack(); // Go back to Property Details
+      navigation.goBack();
     } catch (e) {
       notifyError(e?.response?.data?.message || "Failed to add unit");
     } finally {
       setSaving(false);
     }
   }
+
+  // ...existing code...
 
   return (
     <Modal
@@ -117,6 +135,27 @@ export default function AddUnitModal({ route, navigation }) {
           </View>
 
           <ScrollView style={styles.formContainer}>
+            {/* --- Unit Photos Upload --- */}
+            <L label="Unit Photos">
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <Pressable onPress={pickPhotos} style={[styles.button, styles.buttonSmall]}>
+                  <Text style={styles.buttonText}>Pick Photos</Text>
+                </Pressable>
+                <Text style={{ marginLeft: 10, color: colors.muted, fontSize: 13 }}>
+                  {photos.length ? `${photos.length} selected` : 'No photos selected'}
+                </Text>
+              </View>
+              <ScrollView horizontal style={{ flexDirection: 'row', marginBottom: 8 }}>
+                {photos.map((photo, idx) => (
+                  <View key={photo.uri + idx} style={{ marginRight: 10, position: 'relative' }}>
+                    <Image source={{ uri: photo.uri }} style={{ width: 70, height: 70, borderRadius: 8 }} />
+                    <Pressable onPress={() => removePhoto(idx)} style={{ position: 'absolute', top: -8, right: -8, backgroundColor: '#fff', borderRadius: 10 }}>
+                      <Ionicons name="close-circle" size={20} color={colors.danger} />
+                    </Pressable>
+                  </View>
+                ))}
+              </ScrollView>
+            </L>
             <L label="Unit Number*">
               <T
                 value={form.unitNumber}
@@ -281,6 +320,7 @@ export default function AddUnitModal({ route, navigation }) {
       />
     </Modal>
   );
+
 }
 
 // --- L & T Components ---
@@ -292,6 +332,7 @@ function L({ label, children, style }) {
     </View>
   );
 }
+
 function T(props) {
   const baseStyle = [
     styles.textInputBase,
@@ -416,6 +457,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     height: 44, // Match input height
     justifyContent: "center",
+  },
+  // small button variant used for the pick photos button
+  buttonSmall: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    minWidth: 90,
   },
   addButtonDisabled: {
     backgroundColor: colors.muted,

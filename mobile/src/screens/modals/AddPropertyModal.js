@@ -49,6 +49,7 @@ export default function AddPropertyModal({ navigation }) {
     more: "",
   });
 
+  const [amenityInput, setAmenityInput] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [typePickerOpen, setTypePickerOpen] = useState(false);
 
@@ -253,22 +254,38 @@ export default function AddPropertyModal({ navigation }) {
                     placeholder="Village/Barangay or specific notes"
                   />
                 </L>
-                {/* --- Amenities Input --- */}
-                <L label="Amenities (comma-separated)">
-                  <T
-                    value={form.amenities.join(", ")} // Join array for display
-                    // Split string into array, trim whitespace, remove empty strings
-                    onChangeText={(v) =>
-                      setForm((s) => ({
-                        ...s,
-                        amenities: v
-                          .split(",")
-                          .map((a) => a.trim())
-                          .filter(Boolean),
-                      }))
-                    }
-                    placeholder="e.g., Swimming Pool, Gym, Parking Area"
-                  />
+                {/* --- Amenities Input (multi) --- */}
+                <L label="Amenities (add one at a time)">
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                    <T
+                      value={amenityInput || ''}
+                      onChangeText={setAmenityInput}
+                      placeholder="e.g., Swimming Pool"
+                      style={{ flex: 1, marginRight: 8 }}
+                    />
+                    <Pressable
+                      style={[styles.button, styles.buttonSmall, (!amenityInput || form.amenities.includes(amenityInput.trim())) && styles.buttonDisabled]}
+                      onPress={() => {
+                        if (amenityInput && !form.amenities.includes(amenityInput.trim())) {
+                          setForm(s => ({ ...s, amenities: [...s.amenities, amenityInput.trim()] }));
+                          setAmenityInput('');
+                        }
+                      }}
+                      disabled={!amenityInput || form.amenities.includes(amenityInput?.trim())}
+                    >
+                      <Text style={styles.buttonText}>Add</Text>
+                    </Pressable>
+                  </View>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {form.amenities.map((a, i) => (
+                      <View key={a + i} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.light, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, marginRight: 6, marginBottom: 6 }}>
+                        <Text style={{ color: colors.text }}>{a}</Text>
+                        <Pressable onPress={() => setForm(s => ({ ...s, amenities: s.amenities.filter((x, idx) => idx !== i) }))} style={{ marginLeft: 6 }}>
+                          <Text style={{ color: colors.danger, fontWeight: 'bold' }}>×</Text>
+                        </Pressable>
+                      </View>
+                    ))}
+                  </View>
                 </L>
               </View>
             )}

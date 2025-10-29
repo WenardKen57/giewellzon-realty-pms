@@ -14,6 +14,7 @@ import { colors } from "../../theme/colors";
 import { listProperties, listUnitsForProperty } from "../../api/properties";
 import { createSale } from "../../api/sales";
 import PickerModal from "../../components/PickerModal";
+import DatePickerField from "../../components/DatePickerField";
 import { notifyError, notifySuccess } from "../../utils/notify";
 
 const FINANCING_TYPES = ["cash", "pag_ibig", "in_house", "others"];
@@ -231,13 +232,11 @@ export default function AddSaleModal({ navigation }) {
               keyboardType="numeric"
             />
           </L>
-          <L label="Sale Date (YYYY-MM-DD)">
-            <T
-              value={form.saleDate}
-              onChangeText={(v) => setForm((s) => ({ ...s, saleDate: v }))}
-              placeholder={new Date().toISOString().split("T")[0]}
-            />
-          </L>
+          <DatePickerField
+            label="Sale Date"
+            value={form.saleDate}
+            onChange={(v) => setForm((s) => ({ ...s, saleDate: v }))}
+          />
 
           <L label="Financing Type">
             <Pressable

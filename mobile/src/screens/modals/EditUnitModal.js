@@ -8,10 +8,12 @@ import {
   ScrollView,
   StyleSheet,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
-import { updateUnit } from "../../api/properties"; // Use the new API function
+import { updateUnit, uploadUnitPhotos } from "../../api/properties"; // Use the new API function
+import * as ImagePicker from "expo-image-picker";
 import { notifyError, notifySuccess } from "../../utils/notify";
 import PickerModal from "../../components/PickerModal";
 
@@ -22,7 +24,40 @@ const UNIT_STATUS_OPTIONS = [
 ];
 
 export default function EditUnitModal({ route, navigation }) {
-  const { unit } = route.params; // Get the unit object passed during navigation
+  // Extract unit from route params before using it in state initializers
+  const { unit } = route.params;
+
+  // --- State for unit photos ---
+  const [photos, setPhotos] = useState([]); // New photos to upload
+  const [existingPhotos, setExistingPhotos] = useState(unit?.photos || []); // Existing photos from backend
+
+  // --- Pick images for unit ---
+  async function pickPhotos() {
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      quality: 0.85,
+      selectionLimit: 10,
+    });
+    if (!res.canceled && res.assets && res.assets.length > 0) {
+      const newPhotos = res.assets.map((asset) => ({
+        uri: asset.uri,
+        name: asset.fileName || `unitphoto.${asset.mimeType?.split("/")[1] || "jpg"}`,
+        type: asset.mimeType || "image/jpeg",
+      }));
+      setPhotos((prev) => [...prev, ...newPhotos]);
+    }
+  }
+
+  // --- Remove a new photo ---
+  function removePhoto(idx) {
+    setPhotos((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  // --- Remove an existing photo (frontend only, not backend delete) ---
+  function removeExistingPhoto(idx) {
+    setExistingPhotos((prev) => prev.filter((_, i) => i !== idx));
+  }
   const [saving, setSaving] = useState(false);
   const [statusPickerOpen, setStatusPickerOpen] = useState(false);
 
@@ -111,8 +146,13 @@ export default function EditUnitModal({ route, navigation }) {
           bedrooms: Number(form.specifications.bedrooms || 0),
           bathrooms: Number(form.specifications.bathrooms || 0),
         },
+        photos: existingPhotos, // Only keep photos that remain
       };
       await updateUnit(unit._id, payload); // Pass unitId and payload
+      // Upload new photos if any
+      if (photos.length > 0) {
+        await uploadUnitPhotos(unit._id, photos);
+      }
       notifySuccess("Unit updated successfully!");
       navigation.goBack(); // Go back to Property Details
     } catch (e) {
@@ -142,6 +182,39 @@ export default function EditUnitModal({ route, navigation }) {
           </View>
 
           <ScrollView style={styles.formContainer}>
+            {/* --- Unit Photos Upload --- */}
+            <L label="Unit Photos">
+              {/* Existing photos (from backend) */}
+              <ScrollView horizontal style={{ flexDirection: 'row', marginBottom: 8 }}>
+                {existingPhotos.map((photo, idx) => (
+                  <View key={photo.url || photo.uri || idx} style={{ marginRight: 10, position: 'relative' }}>
+                    <Image source={{ uri: photo.url || photo.uri }} style={{ width: 70, height: 70, borderRadius: 8 }} />
+                    <Pressable onPress={() => removeExistingPhoto(idx)} style={{ position: 'absolute', top: -8, right: -8, backgroundColor: '#fff', borderRadius: 10 }}>
+                      <Ionicons name="close-circle" size={20} color={colors.danger} />
+                    </Pressable>
+                  </View>
+                ))}
+              </ScrollView>
+              {/* New photos to upload */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <Pressable onPress={pickPhotos} style={[styles.button, styles.buttonSmall]}>
+                  <Text style={styles.buttonText}>Pick Photos</Text>
+                </Pressable>
+                <Text style={{ marginLeft: 10, color: colors.muted, fontSize: 13 }}>
+                  {photos.length ? `${photos.length} selected` : 'No new photos selected'}
+                </Text>
+              </View>
+              <ScrollView horizontal style={{ flexDirection: 'row', marginBottom: 8 }}>
+                {photos.map((photo, idx) => (
+                  <View key={photo.uri + idx} style={{ marginRight: 10, position: 'relative' }}>
+                    <Image source={{ uri: photo.uri }} style={{ width: 70, height: 70, borderRadius: 8 }} />
+                    <Pressable onPress={() => removePhoto(idx)} style={{ position: 'absolute', top: -8, right: -8, backgroundColor: '#fff', borderRadius: 10 }}>
+                      <Ionicons name="close-circle" size={20} color={colors.danger} />
+                    </Pressable>
+                  </View>
+                ))}
+              </ScrollView>
+            </L>
             <L label="Unit Number*">
               <T
                 value={form.unitNumber}
@@ -442,6 +515,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     height: 44,
     justifyContent: "center",
+  },
+  // small button variant used for the pick photos button
+  buttonSmall: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    minWidth: 90,
   },
   addButtonDisabled: {
     backgroundColor: colors.muted,
