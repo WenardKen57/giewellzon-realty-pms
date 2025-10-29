@@ -1,10 +1,12 @@
 import { useEffect, useState, useMemo } from "react";
-import { useParams } from "react-router-dom";
+// *** ADD useLocation ***
+import { useParams, useLocation } from "react-router-dom";
 import { PropertiesAPI } from "../../api/properties";
 import InquiryForm from "../../components/layout/InquiryForm";
 
 export default function PropertyDetail() {
   const { id } = useParams();
+  const location = useLocation(); // *** ADD this ***
   const [p, setP] = useState(null);
   const [lightbox, setLightbox] = useState({ open: false, index: 0 });
 
@@ -17,6 +19,34 @@ export default function PropertyDetail() {
   useEffect(() => {
     if (id) load();
   }, [id]);
+
+  // *** NEW: useEffect to scroll to hash ***
+  useEffect(() => {
+    // Only scroll if there's a hash and property data (p) has loaded
+    if (location.hash && p) {
+      const id = location.hash.replace("#", "");
+      // Use a timeout to ensure the element has rendered
+      const timer = setTimeout(() => {
+        const element = document.getElementById(id);
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth", block: "start" });
+
+          // Optional: add a temporary highlight
+          element.style.transition = "all 0.3s ease-in-out";
+          element.style.backgroundColor = "rgba(255, 235, 59, 0.3)"; // Yellow highlight
+          const highlightTimer = setTimeout(() => {
+            if (element) {
+              element.style.backgroundColor = "transparent";
+            }
+          }, 2500);
+
+          return () => clearTimeout(highlightTimer);
+        }
+      }, 300); // 300ms delay to wait for render
+
+      return () => clearTimeout(timer);
+    }
+  }, [location.hash, p]); // Re-run if hash changes or property data loads
 
   // 🧠 Group available units
   const groupedUnits = useMemo(() => {
@@ -32,6 +62,7 @@ export default function PropertyDetail() {
         floorArea = 0,
       } = specifications || {};
 
+      // This key MUST match the key generated in Properties.jsx
       const key = `beds-${bedrooms}-baths-${bathrooms}-sqm-${floorArea}`;
 
       if (!acc[key]) {
@@ -80,7 +111,9 @@ export default function PropertyDetail() {
 
       <div className="grid lg:grid-cols-[1fr_320px] gap-6">
         <div>
-          {/* 🏠 Main Image */}
+          {/* ... (rest of the component is the same) ... */}
+
+          {/* 🏠 Main Image, 🖼️ Thumbnail Grid, Property Info, etc. ... */}
           <div
             className="relative cursor-pointer group"
             onClick={() => openLightbox(0)}
@@ -98,7 +131,6 @@ export default function PropertyDetail() {
             </div>
           </div>
 
-          {/* 🖼️ Thumbnail Grid */}
           {photos?.length > 1 && (
             <div className="grid grid-cols-4 gap-2 mt-2">
               {photos.slice(1, 5).map((ph, i) => (
@@ -113,7 +145,6 @@ export default function PropertyDetail() {
             </div>
           )}
 
-          {/* Property Info */}
           <div className="flex items-center justify-between mt-4">
             <div>
               <h1 className="text-xl font-semibold">{p.propertyName}</h1>
@@ -128,7 +159,6 @@ export default function PropertyDetail() {
             )}
           </div>
 
-          {/* Video Tour */}
           {p.videoTours?.[0] && (
             <div className="mt-6">
               <h3 className="mb-2 font-medium">Property video tour</h3>
@@ -144,7 +174,6 @@ export default function PropertyDetail() {
             </div>
           )}
 
-          {/* Description */}
           <div className="mt-6">
             <h3 className="mb-2 font-medium">Description</h3>
             <p className="text-sm text-neutral-700">{p.description || "—"}</p>
@@ -166,7 +195,7 @@ export default function PropertyDetail() {
             </div>
           </div>
 
-          {/* Amenities */}
+          {/* ... (Amenities and Site Map sections) ... */}
           {p.amenities?.length > 0 && (
             <div className="mt-6">
               <h3 className="mb-2 font-medium">Amenities</h3>
@@ -183,7 +212,6 @@ export default function PropertyDetail() {
             </div>
           )}
 
-          {/* Site Map */}
           {p.siteMap?.url && (
             <div className="mt-6">
               <h3 className="mb-2 font-medium">Site Development Plan</h3>
@@ -223,7 +251,7 @@ export default function PropertyDetail() {
         </aside>
       </div>
 
-      {/* Lightbox */}
+      {/* Lightbox ... (no change here) ... */}
       {lightbox.open && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
@@ -270,7 +298,7 @@ export default function PropertyDetail() {
 
 // 🏘️ UnitGroupCard with carousel support
 function UnitGroupCard({ group }) {
-  const { specifications, count, minPrice, photos = [] } = group;
+  const { specifications, count, minPrice, photos = [], key } = group; // *** Destructure key ***
   const [index, setIndex] = useState(0);
   const {
     bedrooms = 0,
@@ -294,16 +322,17 @@ function UnitGroupCard({ group }) {
   const hasPhotos = photos && photos.length > 0;
 
   return (
-    <div className="p-4 card space-y-3">
+    // *** MODIFIED: Add id={key} to this div ***
+    <div id={key} className="p-4 card space-y-3 scroll-mt-20">
+      {" "}
+      {/* Added scroll-mt-20 for header offset */}
       <div className="flex items-center justify-between">
         <div className="text-lg font-semibold text-brand-primary">{title}</div>
         <span className="badge badge-green">{count} Available</span>
       </div>
-
       <div className="font-semibold text-brand-primary">
         Starting from: ₱ {Number(minPrice || 0).toLocaleString()}
       </div>
-
       {/* 🖼️ Carousel for unit photos */}
       {hasPhotos && (
         <div className="relative w-full overflow-hidden rounded-lg h-56 bg-gray-100">
@@ -342,7 +371,6 @@ function UnitGroupCard({ group }) {
           )}
         </div>
       )}
-
       <div className="grid gap-2 p-3 text-sm rounded bg-gray-50 md:grid-cols-3">
         {lotArea > 0 && (
           <div>
@@ -374,6 +402,7 @@ function UnitGroupCard({ group }) {
   );
 }
 
+// ... (toEmbed function is unchanged) ...
 function toEmbed(url) {
   try {
     const u = new URL(url);

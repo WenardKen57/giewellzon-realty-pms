@@ -77,47 +77,6 @@ export default function Properties() {
     setFilters((s) => ({ ...s, city: "" }));
   }, [filters.province]);
 
-  // 🧠 Group units
-  const groupedList = useMemo(() => {
-    if (!rawList || rawList.length === 0) return [];
-
-    const groups = rawList.reduce((acc, unit) => {
-      const { propertyInfo, specifications, price } = unit;
-      if (!propertyInfo) return acc;
-
-      const {
-        bedrooms = 0,
-        bathrooms = 0,
-        floorArea = 0,
-        lotArea = 0,
-      } = specifications || {};
-
-      const groupKey = `${
-        propertyInfo._id
-      }-beds-${bedrooms}-baths-${bathrooms}-sqm-${floorArea || lotArea}`;
-
-      if (!acc[groupKey]) {
-        acc[groupKey] = {
-          groupKey,
-          propertyInfo,
-          specifications,
-          count: 0,
-          minPrice: price,
-          representativeUnit: unit,
-        };
-      }
-
-      acc[groupKey].count += 1;
-      if (price < acc[groupKey].minPrice) {
-        acc[groupKey].minPrice = price;
-      }
-
-      return acc;
-    }, {});
-
-    return Object.values(groups);
-  }, [rawList]);
-
   return (
     <div className="py-8 container-page">
       <h1 className="text-xl font-semibold">PROPERTY LISTINGS</h1>
@@ -248,16 +207,16 @@ export default function Properties() {
         {/* Listings */}
         <div>
           <div className="mb-3 text-sm text-neutral-600">
-            Showing {groupedList.length} listing groups
+            Showing {rawList.length} units
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
-            {groupedList.map((group) => (
-              <PropertyGroupCard key={group.groupKey} group={group} />
+            {rawList.map((unit) => (
+              <UnitCard key={unit._id} unit={unit} />
             ))}
-            {groupedList.length === 0 && (
+            {rawList.length === 0 && (
               <p className="text-neutral-600 md:col-span-3">
-                No properties found matching your criteria.
+                No units found matching your criteria.
               </p>
             )}
           </div>
@@ -267,9 +226,14 @@ export default function Properties() {
   );
 }
 
-function PropertyGroupCard({ group }) {
-  const { propertyInfo, specifications, count, minPrice, representativeUnit } =
-    group;
+// MODIFIED: UnitCard component
+function UnitCard({ unit }) {
+  const { propertyInfo, specifications, price, photos, unitNumber } = unit;
+
+  if (!propertyInfo) {
+    return null;
+  }
+
   const {
     bedrooms = 0,
     bathrooms = 0,
@@ -278,7 +242,9 @@ function PropertyGroupCard({ group }) {
   } = specifications || {};
 
   let unitTypeTitle = "Unit";
-  if (bedrooms > 0) {
+  if (unitNumber) {
+    unitTypeTitle = `Unit ${unitNumber}`;
+  } else if (bedrooms > 0) {
     unitTypeTitle = `${bedrooms} BR ${
       bathrooms > 0 ? `/ ${bathrooms} Bath` : ""
     }`;
@@ -292,39 +258,37 @@ function PropertyGroupCard({ group }) {
     <div className="overflow-hidden card">
       <img
         src={
-          propertyInfo.thumbnail ||
-          representativeUnit.photos?.[0] ||
-          "https://via.placeholder.com/640x360?text=Property"
+          photos?.[0] || // <-- Use unit photo
+          "https://via.placeholder.com/640x360?text=No+Unit+Photo" // <-- Fallback to placeholder
         }
         className="object-cover w-full h-40"
-        alt={propertyInfo.propertyName}
+        alt={unitTypeTitle} // <-- Use unit title for alt text
       />
       <div className="p-4 space-y-1">
-        <div className="flex items-start justify-between gap-2">
-          <div className="font-medium">{propertyInfo.propertyName}</div>
-          <span className="badge badge-green">{count} Available</span>
-        </div>
+        {/* H1: Unit Title */}
+        <div className="font-medium">{unitTypeTitle}</div>
 
+        {/* H2: Property Parent */}
         <div className="text-sm font-semibold text-brand-primary">
-          {unitTypeTitle}
+          {propertyInfo.propertyName}
         </div>
 
+        {/* Location (related to property) */}
         <div className="text-sm text-neutral-600">
           {propertyInfo.city
             ? `${propertyInfo.city}, ${propertyInfo.province}`
             : ""}
         </div>
 
+        {/* Price */}
         <div className="font-semibold text-brand-primary">
-          Starting from: ₱ {Number(minPrice || 0).toLocaleString()}
+          ₱ {Number(price || 0).toLocaleString()}
         </div>
 
+        {/* Link */}
         <div className="pt-2">
-          <Link
-            to={`/properties/${propertyInfo._id}`}
-            className="btn btn-outline"
-          >
-            See More
+          <Link to={`/unit/${unit._id}`} className="btn btn-outline">
+            See More Details
           </Link>
         </div>
       </div>
