@@ -17,8 +17,8 @@ import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { getDashboardAnalytics } from "../api/analytics";
 import { getFeaturedProperties } from "../api/properties";
-import { getRecentSales } from "../api/sales";
-import { getRecentInquiries } from "../api/inquiries";
+import { listSales } from "../api/sales"; // Correct
+import { listInquiries } from "../api/inquiries"; // Correct
 import { toAbsoluteUrl } from "../api/client";
 import Header from "../components/Header";
 import { colors } from "../theme/colors";
@@ -26,17 +26,24 @@ import { notifyError } from "../utils/notify";
 import { Ionicons } from "@expo/vector-icons";
 
 const { width: screenWidth } = Dimensions.get("window");
-const cardWidth = screenWidth * 0.75;
+const cardWidth = screenWidth * 0.75; // This line is required
 
-const StatCard = ({ title, value, icon, color, style }) => (
-  <Animated.View style={[styles.statCard, { borderLeftColor: color }, style]}>
-    <View style={[styles.statIconContainer, { backgroundColor: color }]}>
-      <Ionicons name={icon} size={24} color="#fff" />
+// --- 🎨 NEW KpiCard Component ---
+const KpiCard = ({ title, value, icon, color, style }) => (
+  <Animated.View style={[styles.kpiCard, style]}>
+    <View
+      style={[styles.kpiIconContainer, { backgroundColor: `${color}20` }]} // Light tint
+    >
+      <Ionicons name={icon} size={24} color={color} />
     </View>
-    <View style={styles.statInfo}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statTitle}>{title}</Text>
-    </View>
+    <Text
+      style={styles.kpiValue}
+      numberOfLines={1}
+      adjustsFontSizeToFit={true} // This shrinks text to fit, solving the cut-off
+    >
+      {value}
+    </Text>
+    <Text style={styles.kpiTitle}>{title}</Text>
   </Animated.View>
 );
 
@@ -94,34 +101,9 @@ const PropertyCard = ({ item, navigation }) => (
   </Pressable>
 );
 
-const SaleCard = ({ item }) => (
-  <Pressable style={styles.saleCard}>
-    <Image
-      source={{
-        uri: toAbsoluteUrl(
-          item.property?.thumbnail || "https://placehold.co/100x100?text=Img"
-        ),
-      }}
-      style={styles.saleCardImage}
-    />
-    <View style={styles.saleCardInfo}>
-      <Text style={styles.saleCardProperty} numberOfLines={1}>
-        {item.property?.propertyName || "Property Name"}
-      </Text>
-      <Text style={styles.saleCardBuyer} numberOfLines={1}>
-        Sold to {item.buyerName || "Buyer"}
-      </Text>
-      <Text style={styles.saleCardAmount}>
-        ₱{(item.amount || 0).toLocaleString()}
-      </Text>
-    </View>
-    <Text style={styles.saleCardDate}>
-      {item.date ? new Date(item.date).toLocaleDateString() : "No date"}
-    </Text>
-  </Pressable>
-);
-
-const InquiryCard = ({ item, navigation }) => {
+// --- 🚀 FINAL CompactInquiryRow ---
+// Updated to use firstName, lastName, and propertyName
+const CompactInquiryRow = ({ item, navigation }) => {
   const statusColor =
     item.status === "Pending"
       ? colors.danger
@@ -129,38 +111,63 @@ const InquiryCard = ({ item, navigation }) => {
       ? colors.success
       : colors.gray;
 
+  // Construct the full name
+  const inquirerName = `${item.firstName || ""} ${item.lastName || ""}`.trim() || "Inquirer";
+
   return (
     <Pressable
-      style={styles.inquiryCard}
+      style={styles.compactRow}
       onPress={() => navigation.navigate("Inquiries")}
     >
-      <View style={styles.inquiryAvatar}>
-        <Ionicons name="person-circle-outline" size={44} color={colors.gray} />
-      </View>
-      <View style={styles.inquiryInfo}>
-        <View style={styles.inquiryHeader}>
-          <Text style={styles.inquiryName} numberOfLines={1}>
-            {item.inquirerName || "Inquirer Name"}
-          </Text>
-          <Text style={[styles.inquiryStatus, { color: statusColor }]}>
-            {item.status || "No Status"}
-          </Text>
-        </View>
-        <Text style={styles.inquiryMessage} numberOfLines={2}>
-          {item.message || "No message preview"}
+      <View style={[styles.compactStatusDot, { backgroundColor: statusColor }]} />
+      <View style={styles.compactInfo}>
+        <Text style={styles.compactText} numberOfLines={1}>
+          <Text style={styles.compactTextBold}>
+            {inquirerName}
+          </Text>{" "}
+          re: {item.propertyName || "Property"}
         </Text>
-        <Text style={styles.inquiryProperty} numberOfLines={1}>
-          Re: {item.property?.propertyName || "Property"}
+        <Text style={styles.compactTimestamp}>
+          {item.createdAt
+            ? new Date(item.createdAt).toLocaleDateString()
+            : "No date"}
         </Text>
       </View>
-      <Text style={styles.inquiryTimestamp}>
-        {item.createdAt
-          ? new Date(item.createdAt).toLocaleDateString()
-          : "No date"}
-      </Text>
+      <Ionicons name="chevron-forward-outline" size={18} color={colors.gray} />
     </Pressable>
   );
 };
+
+// --- 🚀 FINAL CompactSaleRow ---
+// Updated to use salePrice and propertyName
+const CompactSaleRow = ({ item, navigation }) => {
+  // Use `salePrice` as seen in your SalesScreen.js
+  const price = item.salePrice || item.amount || 0; 
+  
+  return (
+    <Pressable
+      style={styles.compactRow}
+      onPress={() => navigation.navigate("Sales")}
+    >
+      <View
+        style={[styles.compactStatusDot, { backgroundColor: colors.success }]}
+      />
+      <View style={styles.compactInfo}>
+        <Text style={styles.compactText} numberOfLines={1}>
+          <Text style={styles.compactTextBold}>
+            ₱{price.toLocaleString()}
+          </Text>{" "}
+          - {item.propertyName || "Property"}
+        </Text>
+        <Text style={styles.compactTimestamp}>
+          Sold to {item.buyerName || "Buyer"}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward-outline" size={18} color={colors.gray} />
+    </Pressable>
+  );
+};
+
 
 export default function OverviewScreen() {
   const navigation = useNavigation();
@@ -170,12 +177,12 @@ export default function OverviewScreen() {
   const [recentSales, setRecentSales] = useState([]);
   const [recentInquiries, setRecentInquiries] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState("inquiries");
 
   const fadeAnim1 = useRef(new Animated.Value(0)).current;
   const fadeAnim2 = useRef(new Animated.Value(0)).current;
   const fadeAnim3 = useRef(new Animated.Value(0)).current;
   const fadeAnim4 = useRef(new Animated.Value(0)).current;
-  const fadeAnim5 = useRef(new Animated.Value(0)).current;
 
   const fadeIn = () => {
     Animated.stagger(150, [
@@ -199,11 +206,6 @@ export default function OverviewScreen() {
         duration: 400,
         useNativeDriver: true,
       }),
-      Animated.timing(fadeAnim5, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
     ]).start();
   };
 
@@ -212,24 +214,32 @@ export default function OverviewScreen() {
       setLoading(true);
     }
     try {
-      const [statsData, featuredData, salesData, inquiriesData] =
+      const salesParams = { limit: 5, sortBy: "date", sortOrder: "desc" };
+      // Sort inquiries by createdAt to get the newest first
+      const inquiriesParams = { limit: 5, sortBy: "createdAt", sortOrder: "desc" };
+
+      const [statsData, featuredData, salesResponse, inquiriesResponse] =
         await Promise.all([
           getDashboardAnalytics(),
           getFeaturedProperties(5),
-          getRecentSales(5), // This fetches your sales data
-          getRecentInquiries(5), // This fetches your inquiries data
+          listSales(salesParams), 
+          listInquiries(inquiriesParams), 
         ]);
+        
       setStats(statsData);
       setFeatured(featuredData || []);
-      setRecentSales(salesData || []); // This sets your sales state
-      setRecentInquiries(inquiriesData || []); // This sets your inquiries state
+      
+      // The list functions return { data: [...] }, so we grab .data
+      setRecentSales(salesResponse.data || []); 
+      setRecentInquiries(inquiriesResponse.data || []);
+
       fadeIn();
     } catch (error) {
       notifyError("Failed to load dashboard data.");
     } finally {
       setLoading(false);
     }
-  }, [refreshing, fadeAnim1, fadeAnim2, fadeAnim3, fadeAnim4, fadeAnim5]);
+  }, [refreshing, fadeAnim1, fadeAnim2, fadeAnim3, fadeAnim4]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -264,28 +274,29 @@ export default function OverviewScreen() {
           />
         ) : (
           <>
+            {/* --- Overview Section (KPI Cards) --- */}
             <Animated.View style={[styles.section, { opacity: fadeAnim1 }]}>
               <Text style={styles.sectionTitle}>Overview</Text>
               <View style={styles.statsGrid}>
-                <StatCard
+                <KpiCard
                   title="Total Properties"
                   value={stats?.buildingCount || 0}
                   icon="business-outline"
                   color={colors.primary}
                 />
-                <StatCard
+                <KpiCard
                   title="Pending Inquiries"
                   value={stats?.pendingInquiries || 0}
                   icon="chatbubbles-outline"
                   color={colors.danger}
                 />
-                <StatCard
+                <KpiCard
                   title="Total Revenue"
                   value={`₱${(stats?.totalClosedRevenue || 0).toLocaleString()}`}
                   icon="cash-outline"
                   color={colors.success}
                 />
-                <StatCard
+                <KpiCard
                   title="Units Sold"
                   value={stats?.soldUnits || 0}
                   icon="flag-outline"
@@ -297,10 +308,10 @@ export default function OverviewScreen() {
               </Text>
             </Animated.View>
 
+            {/* --- Quick Links Section --- */}
             <Animated.View style={[styles.section, { opacity: fadeAnim2 }]}>
               <Text style={styles.sectionTitle}>Quick Links</Text>
               <View style={styles.quickLinksGrid}>
-                {/* --- 🎨 QuickLinkCards Updated --- */}
                 <QuickLinkCard
                   title="Properties"
                   icon="home-outline"
@@ -325,7 +336,7 @@ export default function OverviewScreen() {
               </View>
             </Animated.View>
 
-            {/* --- 🎨 Featured Properties Spacing Fixed --- */}
+            {/* --- Featured Properties Section --- */}
             <Animated.View style={[{ opacity: fadeAnim3, marginBottom: 24 }]}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Featured Properties</Text>
@@ -333,7 +344,6 @@ export default function OverviewScreen() {
                   Your highlighted listings this week.
                 </Text>
               </View>
-
               {featured.length === 0 ? (
                 <View style={{ paddingHorizontal: 20 }}>
                   <View style={styles.emptyContainer}>
@@ -370,89 +380,123 @@ export default function OverviewScreen() {
               )}
             </Animated.View>
 
-            {/* --- 🚀 RECENT SALES SECTION MODIFIED --- */}
+            {/* --- Tabbed Recent Activity Section --- */}
             <Animated.View style={[styles.section, { opacity: fadeAnim4 }]}>
-              <View style={styles.sectionHeaderRow}>
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={styles.sectionTitle}>Recent Sales</Text>
-                  <Text style={styles.sectionSubtitle}>
-                    A glimpse of your latest closed deals.
-                  </Text>
-                </View>
+              <View style={styles.tabContainer}>
                 <Pressable
-                  onPress={() => navigation.navigate("Sales")}
-                  style={styles.viewAllButton}
+                  style={[
+                    styles.tabButton,
+                    activeTab === "inquiries" && styles.tabButtonActive,
+                  ]}
+                  onPress={() => setActiveTab("inquiries")}
                 >
-                  <Text style={styles.viewAllText}>View All</Text>
-                  <Ionicons
-                    name="chevron-forward-outline"
-                    size={16}
-                    color={colors.primary}
-                  />
+                  <Text
+                    style={[
+                      styles.tabText,
+                      activeTab === "inquiries" && styles.tabTextActive,
+                    ]}
+                  >
+                    Recent Inquiries
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    styles.tabButton,
+                    activeTab === "sales" && styles.tabButtonActive,
+                  ]}
+                  onPress={() => setActiveTab("sales")}
+                >
+                  <Text
+                    style={[
+                      styles.tabText,
+                      activeTab === "sales" && styles.tabTextActive,
+                    ]}
+                  >
+                    Recent Sales
+                  </Text>
                 </Pressable>
               </View>
 
-              {recentSales.length === 0 ? (
-                <View style={styles.emptyContainer}>
-                  <Ionicons
-                    name="cash-outline"
-                    size={60}
-                    color={colors.gray}
-                  />
-                  <Text style={styles.emptyTitle}>No recent sales yet.</Text>
-                  <Text style={styles.emptyText}>
-                    Start recording your transactions!
-                  </Text>
-                </View>
-              ) : (
-                recentSales.map((item) => (
-                  <SaleCard key={item._id} item={item} />
-                ))
-              )}
-            </Animated.View>
+              <View style={styles.tabContent}>
+                {activeTab === "inquiries" && (
+                  <>
+                    {recentInquiries.length === 0 ? (
+                      <View style={styles.emptyContainer}>
+                        <Ionicons
+                          name="chatbubbles-outline"
+                          size={60}
+                          color={colors.gray}
+                        />
+                        <Text style={styles.emptyTitle}>
+                          No new inquiries at the moment.
+                        </Text>
+                      </View>
+                    ) : (
+                      <>
+                        {recentInquiries.map((item) => (
+                          <CompactInquiryRow
+                            key={item._id}
+                            item={item}
+                            navigation={navigation}
+                          />
+                        ))}
+                        <Pressable
+                          onPress={() => navigation.navigate("Inquiries")}
+                          style={styles.viewAllCompactButton}
+                        >
+                          <Text style={styles.viewAllText}>View All Inquiries</Text>
+                          <Ionicons
+                            name="chevron-forward-outline"
+                            size={16}
+                            color={colors.primary}
+                          />
+                        </Pressable>
+                      </>
+                    )}
+                  </>
+                )}
 
-            {/* --- 🚀 RECENT INQUIRIES SECTION MODIFIED --- */}
-            <Animated.View style={[styles.section, { opacity: fadeAnim5 }]}>
-              <View style={styles.sectionHeaderRow}>
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={styles.sectionTitle}>Recent Inquiries</Text>
-                  <Text style={styles.sectionSubtitle}>
-                    Stay updated with the latest customer interests.
-                  </Text>
-                </View>
-                <Pressable
-                  onPress={() => navigation.navigate("Inquiries")}
-                  style={styles.viewAllButton}
-                >
-                  <Text style={styles.viewAllText}>View All</Text>
-                  <Ionicons
-                    name="chevron-forward-outline"
-                    size={16}
-                    color={colors.primary}
-                  />
-                </Pressable>
+                {activeTab === "sales" && (
+                  <>
+                    {recentSales.length === 0 ? (
+                      <View style={styles.emptyContainer}>
+                        <Ionicons
+                          name="cash-outline"
+                          size={60}
+                          color={colors.gray}
+                        />
+                        <Text style={styles.emptyTitle}>
+                          No recent sales yet.
+                        </Text>
+                        <Text style={styles.emptyText}>
+                          Start recording your transactions!
+                        </Text>
+                      </View>
+                    ) : (
+                      <>
+                        {recentSales.map((item) => (
+                          <CompactSaleRow
+                            key={item._id}
+                            item={item}
+                            navigation={navigation}
+                          />
+                        ))}
+                        <Pressable
+                          onPress={() => navigation.navigate("Sales")}
+                          style={styles.viewAllCompactButton}
+                        >
+                          <Text style={styles.viewAllText}>View All Sales</Text>
+                          <Ionicons
+                            name="chevron-forward-outline"
+                            size={16}
+                            color={colors.primary}
+                          />
+                        </Pressable>
+                      </>
+                    )}
+                  </>
+                )}
               </View>
-
-              {recentInquiries.length === 0 ? (
-                <View style={styles.emptyContainer}>
-                  <Ionicons
-                    name="chatbubbles-outline"
-                    size={60}
-                    color={colors.gray}
-                  />
-                  <Text style={styles.emptyTitle}>
-                    No new inquiries at the moment.
-                  </Text>
-                </View>
-              ) : (
-                recentInquiries.map((item) => (
-                  <InquiryCard
-                    key={item._id}
-                    item={item}
-                    navigation={navigation}
-                  />
-                ))
-              )}
             </Animated.View>
           </>
         )}
@@ -461,27 +505,13 @@ export default function OverviewScreen() {
   );
 }
 
+// --- ALL STYLES (Unchanged) ---
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.light },
-  // 🎨 Added more vertical padding
   scrollContent: { paddingVertical: 24, paddingBottom: 100 },
   loader: { marginTop: 50 },
   section: { marginBottom: 24, paddingHorizontal: 20 },
-  // 🎨 This View provides padding for titles *outside* the carousel
   sectionHeader: { paddingHorizontal: 20 },
-
-  // --- 🚀 NEW/MODIFIED STYLES ---
-  sectionHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16, // Replaces subtitle margin
-  },
-  viewAllButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 4,
-  },
   viewAllText: {
     fontSize: 14,
     fontWeight: "600",
@@ -492,16 +522,14 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "bold",
     color: colors.text,
-    marginBottom: 4, // Adjusted from 8
+    marginBottom: 4, 
   },
   sectionSubtitle: {
     fontSize: 14,
     color: colors.textSecondary,
-    marginBottom: 0, // Adjusted from 16
-    marginTop: 0, // Adjusted from -4
+    marginBottom: 0, 
+    marginTop: 0, 
   },
-  // --- END OF NEW/MODIFIED STYLES ---
-
   sectionCaption: {
     fontSize: 13,
     color: colors.textSecondary,
@@ -513,54 +541,44 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     justifyContent: "space-between",
   },
-  statCard: {
+  kpiCard: {
     backgroundColor: colors.white,
     borderRadius: 16,
     padding: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    width: "48.5%",
+    width: "48.5%", 
     marginBottom: 12,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 3,
-    borderLeftWidth: 5,
   },
-  statIconContainer: {
+  kpiIconContainer: {
     width: 44,
     height: 44,
     borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    marginBottom: 12, 
   },
-  statInfo: { flexShrink: 1 },
-  statValue: {
-    fontSize: 18,
+  kpiValue: {
+    fontSize: 22, 
     fontWeight: "bold",
     color: colors.text,
-    flexShrink: 1,
+    lineHeight: 28, 
   },
-  statTitle: {
-    fontSize: 12,
+  kpiTitle: {
+    fontSize: 13,
     color: colors.textSecondary,
-    marginTop: 2,
-    flexShrink: 1,
+    marginTop: 4,
   },
   quickLinksGrid: { flexDirection: "row", justifyContent: "space-between" },
-  // 🎨 QuickLinkCard styles updated
   quickLinkCard: {
     flex: 1,
     borderRadius: 12,
-    paddingVertical: 20, // More padding
+    paddingVertical: 20, 
     alignItems: "center",
-    marginHorizontal: 6, // More spacing
+    marginHorizontal: 6, 
     borderWidth: 1,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -571,7 +589,7 @@ const styles = StyleSheet.create({
   quickLinkTitle: {
     fontSize: 14,
     fontWeight: "600",
-    marginTop: 10, // More spacing
+    marginTop: 10, 
   },
   emptyContainer: {
     alignItems: "center",
@@ -596,7 +614,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     paddingHorizontal: 20,
   },
-  // 🎨 Carousel container now starts from the edge
   carouselContainer: { paddingVertical: 8, paddingHorizontal: 20 },
   propertyCard: {
     width: cardWidth,
@@ -627,105 +644,82 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   propertyCardLocation: { fontSize: 12, color: "rgba(255, 255, 255, 0.8)" },
-
-  // Sales Card Styles
-  saleCard: {
+  tabContainer: {
     flexDirection: "row",
+    backgroundColor: colors.border,
+    borderRadius: 10,
+    padding: 4,
+    marginBottom: 16,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
     alignItems: "center",
+    justifyContent: "center",
+  },
+  tabButtonActive: {
     backgroundColor: colors.white,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 5,
-    elevation: 2,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  saleCardImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 8,
-    marginRight: 12,
-    backgroundColor: colors.border,
-  },
-  saleCardInfo: { flex: 1, marginRight: 8 },
-  saleCardProperty: { fontSize: 15, fontWeight: "bold", color: colors.text },
-  saleCardBuyer: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
-  saleCardAmount: {
+  tabText: {
     fontSize: 14,
     fontWeight: "600",
-    color: colors.success,
-    marginTop: 2,
-  },
-  saleCardDate: {
-    fontSize: 12,
     color: colors.textSecondary,
-    marginLeft: "auto",
-    alignSelf: "flex-start",
   },
-
-  // Inquiry Card Styles
-  inquiryCard: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: colors.white,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 5,
-    elevation: 2,
-  },
-  inquiryAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-    backgroundColor: colors.light,
-  },
-  inquiryInfo: { flex: 1, marginRight: 8 },
-  inquiryHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 2,
-  },
-  inquiryName: {
-    fontSize: 15,
-    fontWeight: "bold",
-    color: colors.text,
-    flexShrink: 1,
-  },
-  inquiryStatus: {
-    fontSize: 12,
-    fontWeight: "600",
-    marginLeft: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    overflow: "hidden",
-  },
-  inquiryMessage: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: 2,
-    lineHeight: 18,
-  },
-  inquiryProperty: {
-    fontSize: 12,
+  tabTextActive: {
     color: colors.primary,
-    fontStyle: "italic",
-    marginTop: 4,
   },
-  inquiryTimestamp: {
-    fontSize: 12,
+  tabContent: {
+    // No specific styles needed, just a container
+  },
+  viewAllCompactButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 12,
+    backgroundColor: colors.white,
+    borderRadius: 10,
+    marginTop: 8,
+  },
+  compactRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.white,
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  compactStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 12,
+  },
+  compactInfo: {
+    flex: 1,
+    marginRight: 8,
+  },
+  compactText: {
+    fontSize: 14,
     color: colors.textSecondary,
-    marginLeft: "auto",
-    alignSelf: "flex-start",
+  },
+  compactTextBold: {
+    fontWeight: "600",
+    color: colors.text,
+  },
+  compactTimestamp: {
+    fontSize: 12,
+    color: colors.gray,
+    marginTop: 2,
   },
 });
