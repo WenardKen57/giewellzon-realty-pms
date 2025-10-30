@@ -27,6 +27,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 const { width: screenWidth } = Dimensions.get("window");
 const cardWidth = screenWidth * 0.75; // This line is required
+const cardHeight = Math.round(cardWidth * 0.56); // keep a consistent aspect ratio
 
 // --- 🎨 NEW KpiCard Component ---
 const KpiCard = ({ title, value, icon, color, style }) => (
@@ -83,7 +84,8 @@ const PropertyCard = ({ item, navigation }) => (
         ),
       }}
       style={styles.propertyCardImage}
-      imageStyle={{ borderRadius: 16 }}
+      imageStyle={{ borderRadius: 16, resizeMode: "cover" }}
+      resizeMode="cover"
       {...(Platform.OS === "web" && { referrerPolicy: "no-referrer" })}
     >
       <LinearGradient
@@ -617,7 +619,7 @@ const styles = StyleSheet.create({
   carouselContainer: { paddingVertical: 8, paddingHorizontal: 20 },
   propertyCard: {
     width: cardWidth,
-    height: 220,
+    height: cardHeight,
     borderRadius: 16,
     marginHorizontal: 8,
     shadowColor: "#000",
@@ -626,6 +628,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
     backgroundColor: colors.border,
+    overflow: "hidden", // ensure rounded corners clip the image on native
   },
   propertyCardImage: {
     width: "100%",
