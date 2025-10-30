@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from "react"; // --- MODIFIED: Added useRef, useEffect
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+} from "react";
 import {
   View,
   Text,
@@ -6,8 +12,9 @@ import {
   StyleSheet,
   ActivityIndicator,
   Pressable,
-  ScrollView,
   RefreshControl,
+  Linking,
+  ScrollView,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { listInquiries, updateStatus } from "../api/inquiries";
@@ -15,8 +22,9 @@ import Header from "../components/Header";
 import PickerModal from "../components/PickerModal";
 import { colors } from "../theme/colors";
 import { notifySuccess, notifyError } from "../utils/notify";
+import { Ionicons } from "@expo/vector-icons";
 
-// --- MODIFIED: Added "New" to match backend model ---
+// --- Constants (Unchanged) ---
 const STATUS_OPTIONS = [
   { label: "New", value: "new" },
   { label: "Pending", value: "pending" },
@@ -27,7 +35,6 @@ const STATUS_OPTIONS = [
   { label: "Closed", value: "closed" },
   { label: "Archived", value: "archived" },
 ];
-
 const DATE_FILTER_OPTIONS = [
   { label: "All Time", value: "all" },
   { label: "Today", value: "today" },
@@ -35,70 +42,227 @@ const DATE_FILTER_OPTIONS = [
   { label: "This Month", value: "month" },
   { label: "This Year", value: "year" },
 ];
-
-// --- MODIFIED: Added "New" ---
-const TABS = [
+const VISIBLE_TABS = [
   { label: "All", value: "all" },
   { label: "New", value: "new" },
   { label: "Pending", value: "pending" },
-  { label: "Viewed", value: "viewed" },
-  { label: "Contacted", value: "contacted" },
   { label: "Closed", value: "closed" },
 ];
+const MORE_TAB_OPTIONS = [
+  { label: "Viewed", value: "viewed" },
+  { label: "Contacted", value: "contacted" },
+  { label: "Interested", value: "interested" },
+  { label: "Not Interested", value: "not_interested" },
+  { label: "Archived", value: "archived" },
+];
+const PAGE_LIMIT = 20;
 
+// --- Helper Functions ---
 const getStatusColor = (status) => {
+  // (Unchanged)
   switch (status) {
-    case "new": // --- ADDED ---
-    case "pending":
-      return colors.warning;
-    case "viewed":
-    case "contacted":
-      return colors.info;
-    case "interested":
-      return colors.primary;
-    case "closed":
-      return colors.success;
-    case "not_interested":
-    case "archived":
-      return colors.danger;
-    default:
-      return colors.grey;
+    case "new": case "pending": return colors.warning;
+    case "viewed": case "contacted": return colors.info;
+    case "interested": return colors.primary;
+    case "closed": return colors.success;
+    case "not_interested": case "archived": return colors.danger;
+    default: return colors.grey;
   }
 };
-
 const getDatesFromFilter = (filter) => {
+  // (Unchanged)
   const now = new Date();
   let dateFrom = "";
   let dateTo = now.toISOString();
-
-  if (filter === "all") {
-    return { dateFrom: "", dateTo: "" };
-  }
-
-  if (filter === "today") {
-    dateFrom = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate()
-    ).toISOString();
-  } else if (filter === "week") {
+  if (filter === "all") return { dateFrom: "", dateTo: "" };
+  if (filter === "today") dateFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  else if (filter === "week") {
     const firstDayOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
-    dateFrom = new Date(
-      firstDayOfWeek.getFullYear(),
-      firstDayOfWeek.getMonth(),
-      firstDayOfWeek.getDate()
-    ).toISOString();
-  } else if (filter === "month") {
-    dateFrom = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  } else if (filter === "year") {
-    dateFrom = new Date(now.getFullYear(), 0, 1).toISOString();
-  }
+    dateFrom = new Date(firstDayOfWeek.getFullYear(), firstDayOfWeek.getMonth(), firstDayOfWeek.getDate()).toISOString();
+  } else if (filter === "month") dateFrom = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  else if (filter === "year") dateFrom = new Date(now.getFullYear(), 0, 1).toISOString();
   return { dateFrom, dateTo };
 };
 
-// --- ADDED: Constant for pagination ---
-const PAGE_LIMIT = 20;
+// --- NEW: Simple Date Formatter ---
+const formatRelativeDate = (dateString) => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffTime = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays} days ago`;
+  // Fallback to simple date format if older than a week
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+};
+
+// --- MODIFIED: Enhanced InquiryCard component ---
+const InquiryCard = React.memo(({ item, onStatusPress }) => {
+  const onEmail = () => {
+    if (item.customerEmail) Linking.openURL(`mailto:${item.customerEmail}`);
+  };
+  const onPhone = () => {
+    if (item.customerPhone) Linking.openURL(`tel:${item.customerPhone}`);
+  };
+
+  return (
+    <View style={styles.card}>
+      {/* Header with Relative Date */}
+      <View style={styles.cardHeader}>
+        <Text style={styles.cardTitle}>
+          {item.firstName || ""} {item.lastName || ""}
+        </Text>
+        {/* --- MODIFIED: Using relative date --- */}
+        <Text style={styles.cardDate}>
+          {formatRelativeDate(item.createdAt)}
+        </Text>
+      </View>
+
+      {/* Property Row (More prominent) */}
+      {item.propertyName && (
+        <View style={styles.cardPropertyRow}>
+          <Ionicons
+            name="business-outline"
+            size={16}
+            style={styles.cardPropertyIcon}
+          />
+          {/* --- MODIFIED: Bolder text --- */}
+          <Text style={styles.cardPropertyText} numberOfLines={1}>
+            {item.propertyName}
+          </Text>
+        </View>
+      )}
+
+      {/* Info Section (Actionable) */}
+      <View style={styles.infoSection}>
+        <Pressable style={styles.infoRow} onPress={onEmail} disabled={!item.customerEmail}>
+          <Ionicons
+            name="mail-outline"
+            size={18} // Slightly larger icon
+            style={styles.infoIconActionable}
+          />
+          <Text style={styles.infoValue}>{item.customerEmail || "No Email"}</Text>
+        </Pressable>
+        {item.customerPhone && (
+          <Pressable style={styles.infoRow} onPress={onPhone}>
+            <Ionicons
+              name="call-outline"
+              size={18} // Slightly larger icon
+              style={styles.infoIconActionable}
+            />
+            <Text style={styles.infoValue}>{item.customerPhone}</Text>
+          </Pressable>
+        )}
+      </View>
+
+      {/* Message Section */}
+      <View style={styles.messageContainer}>
+        <Ionicons
+          name="chatbubble-ellipses-outline"
+          size={18} // Slightly larger icon
+          style={styles.infoIconMuted}
+        />
+        <Text style={styles.message}>{item.message || "No message provided."}</Text>
+      </View>
+
+      {/* Footer (Unchanged) */}
+      <View style={styles.cardFooter}>
+        <Pressable
+          style={[
+            styles.statusButton,
+            { backgroundColor: getStatusColor(item.status) },
+          ]}
+          onPress={() => onStatusPress(item)}
+        >
+          <Text style={styles.statusButtonText}>
+            {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+          </Text>
+          <Ionicons
+            name="chevron-down-outline"
+            size={14}
+            color={colors.white}
+          />
+        </Pressable>
+      </View>
+    </View>
+  );
+});
+
+// --- MODIFIED: Enhanced InquiryFilters component ---
+const InquiryFilters = ({
+  activeTab,
+  onTabChange,
+  onMorePress,
+  onDateFilterPress,
+  isDateFilterActive,
+}) => {
+  const isMoreTabActive = useMemo(
+    () => MORE_TAB_OPTIONS.some((tab) => tab.value === activeTab),
+    [activeTab]
+  );
+  const moreTabLabel = useMemo(() => {
+    if (isMoreTabActive) {
+      return (
+        MORE_TAB_OPTIONS.find((tab) => tab.value === activeTab)?.label || "More"
+      );
+    }
+    return "More";
+  }, [activeTab, isMoreTabActive]);
+
+  return (
+    <View style={styles.tabsContainer}>
+      <View style={styles.tabScroller}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ alignItems: 'center' }}>
+          {VISIBLE_TABS.map((tab) => {
+            const isActive = activeTab === tab.value;
+            return (
+              <Pressable
+                key={tab.value}
+                // --- MODIFIED: Added subtle background for active tab ---
+                style={[styles.tab, isActive && styles.activeTabHighlight]}
+                onPress={() => onTabChange(tab.value)}
+              >
+                <Text
+                  style={[styles.tabText, isActive && styles.activeTabText]}
+                >
+                  {tab.label}
+                </Text>
+                {/* --- MODIFIED: Underline is slightly bolder --- */}
+                {isActive && <View style={styles.activeTabIndicator} />}
+              </Pressable>
+            );
+          })}
+          <Pressable
+             // --- MODIFIED: Added subtle background for active "More" tab ---
+             style={[styles.tab, isMoreTabActive && styles.activeTabHighlight]}
+             onPress={onMorePress}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                isMoreTabActive && styles.activeTabText,
+              ]}
+            >
+              {moreTabLabel}
+            </Text>
+             {/* --- MODIFIED: Underline is slightly bolder --- */}
+            {isMoreTabActive && <View style={styles.activeTabIndicator} />}
+          </Pressable>
+        </ScrollView>
+      </View>
+
+      {/* --- MODIFIED: Date Filter Button styling aligned --- */}
+      <Pressable style={styles.dateFilterButton} onPress={onDateFilterPress}>
+        <Ionicons name="calendar-outline" size={22} color={colors.primary} />
+        {isDateFilterActive && <View style={styles.dateFilterBadge} />}
+      </Pressable>
+    </View>
+  );
+};
+
+// --- Main Screen Component (Unchanged Logic) ---
 export default function InquiriesScreen({ navigation }) {
   const [inquiries, setInquiries] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -106,336 +270,102 @@ export default function InquiriesScreen({ navigation }) {
   const [activeTab, setActiveTab] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
   const [isDateModalVisible, setDateModalVisible] = useState(false);
-  const [isStatusModalVisible, setStatusModalVisible] = useState(false);
+  const [isStatusUpdateModalVisible, setStatusUpdateModalVisible] =
+    useState(false);
+  const [isMoreFiltersVisible, setMoreFiltersVisible] = useState(false);
   const [selectedInquiry, setSelectedInquiry] = useState(null);
-
-  // --- ADDED: State for pagination ---
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const isInitialMount = useRef(true);
 
-  // --- MODIFIED: Updated 'load' to handle pagination and correct API params ---
   const load = useCallback(
     async (isRefreshing = false) => {
+      // (Unchanged)
       if (!isRefreshing) setLoading(true);
-      // Reset pagination on a new filter or refresh
-      setPage(1);
-      setInquiries([]);
-
+      setPage(1); setInquiries([]);
       try {
         const { dateFrom, dateTo } = getDatesFromFilter(dateFilter);
-
-        // Build params object to match backend req.query
-        const params = {
-          page: 1,
-          limit: PAGE_LIMIT,
-          dateFrom,
-          dateTo,
-        };
-        if (activeTab !== "all") {
-          params.status = activeTab;
-        }
-
-        // API call now returns { data, total, page, limit }
+        const params = { page: 1, limit: PAGE_LIMIT, dateFrom, dateTo };
+        if (activeTab !== "all") params.status = activeTab;
         const response = await listInquiries(params);
-        setInquiries(response.data || []);
-        setTotal(response.total || 0);
-        setPage(response.page || 1);
-      } catch (error) {
-        notifyError("Failed to load inquiries.");
-        console.error(error);
-      } finally {
-        if (!isRefreshing) setLoading(false);
-      }
-    },
-    [activeTab, dateFilter]
-  ); // Dependencies are correct
-
-  // --- ADDED: useEffect to react to filter changes ---
-  useEffect(() => {
-    load();
-  }, [load]); // 'load' depends on [activeTab, dateFilter]
-
-  // --- MODIFIED: useFocusEffect to only reload on *subsequent* focuses ---
-  useFocusEffect(
-    useCallback(() => {
-      if (isInitialMount.current) {
-        isInitialMount.current = false;
-      } else {
-        // Only reload if navigating *back* to the screen
-        load();
-      }
-    }, [load])
+        setInquiries(response.data || []); setTotal(response.total || 0); setPage(response.page || 1);
+      } catch (error) { notifyError("Failed to load inquiries."); console.error(error); }
+      finally { if (!isRefreshing) setLoading(false); }
+    }, [activeTab, dateFilter]
   );
-
-  // --- MODIFIED: onRefresh calls load with a flag ---
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await load(true); // Pass true to avoid double loader
-    setRefreshing(false);
-  }, [load]);
-
-  // --- ADDED: Function to load more inquiries on scroll ---
+  useEffect(() => { load(); }, [load]);
+  useFocusEffect(useCallback(() => { if (isInitialMount.current) isInitialMount.current = false; else load(); }, [load]));
+  const onRefresh = useCallback(async () => { setRefreshing(true); await load(true); setRefreshing(false); }, [load]);
   const loadMore = useCallback(async () => {
-    // Don't load more if already loading or if we've reached the end
-    if (loading || loadingMore || inquiries.length >= total) return;
-
-    setLoadingMore(true);
+    // (Unchanged)
+    if (loading || loadingMore || inquiries.length >= total) return; setLoadingMore(true);
     try {
-      const { dateFrom, dateTo } = getDatesFromFilter(dateFilter);
-      const nextPage = page + 1;
-
-      const params = {
-        page: nextPage,
-        limit: PAGE_LIMIT,
-        dateFrom,
-        dateTo,
-      };
-      if (activeTab !== "all") {
-        params.status = activeTab;
-      }
-
-      const response = await listInquiries(params);
-      // Append new data to the existing list
-      setInquiries((prev) => [...prev, ...(response.data || [])]);
-      setTotal(response.total || 0);
-      setPage(response.page || nextPage);
-    } catch (error) {
-      notifyError("Failed to load more inquiries.");
-      console.error(error);
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [
-    activeTab,
-    dateFilter,
-    loading,
-    loadingMore,
-    page,
-    total,
-    inquiries.length,
-  ]);
-
-  const handleTabPress = (tab) => {
-    setActiveTab(tab);
-  };
-
-  const handleDateFilterChange = (value) => {
-    setDateFilter(value);
-    setDateModalVisible(false);
-  };
-
-  const openStatusModal = (inquiry) => {
-    setSelectedInquiry(inquiry);
-    setStatusModalVisible(true);
-  };
-
-  const handleChangeStatus = async (newStatus) => {
+      const { dateFrom, dateTo } = getDatesFromFilter(dateFilter); const nextPage = page + 1;
+      const params = { page: nextPage, limit: PAGE_LIMIT, dateFrom, dateTo }; if (activeTab !== "all") params.status = activeTab;
+      const response = await listInquiries(params); setInquiries((prev) => [...prev, ...(response.data || [])]); setTotal(response.total || 0); setPage(response.page || nextPage);
+    } catch (error) { notifyError("Failed to load more inquiries."); console.error(error); }
+    finally { setLoadingMore(false); }
+  }, [activeTab, dateFilter, loading, loadingMore, page, total, inquiries.length]);
+  const handleTabPress = (tab) => { setActiveTab(tab); };
+  const handleDateFilterChange = (value) => { setDateFilter(value); setDateModalVisible(false); };
+  const handleMoreTabChange = (value) => { setActiveTab(value); setMoreFiltersVisible(false); };
+  const openStatusUpdateModal = (inquiry) => { setSelectedInquiry(inquiry); setStatusUpdateModalVisible(true); };
+  const handleStatusUpdate = async (newStatus) => {
+    // (Unchanged)
     if (!selectedInquiry || !newStatus) return;
-
     try {
-      // Backend expects { status: "new-status" } in the body
-      await updateStatus(selectedInquiry._id, newStatus);
-      notifySuccess("Inquiry status updated successfully!");
-      setStatusModalVisible(false);
-      setSelectedInquiry(null);
-      load(); // Refresh the list
-    } catch (error) {
-      notifyError("Failed to update status.");
-      console.error(error);
-    }
+      await updateStatus(selectedInquiry._id, newStatus); notifySuccess("Inquiry status updated successfully!"); setStatusUpdateModalVisible(false); setSelectedInquiry(null); load();
+    } catch (error) { notifyError("Failed to update status."); console.error(error); }
   };
-
-  // --- MODIFIED: renderItem to use correct fields from backend model ---
-  const renderItem = ({ item }) => (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <Text style={styles.cardTitle}>
-          {item.firstName || ""} {item.lastName || ""}
-        </Text>
-        <Text style={styles.cardDate}>
-          {new Date(item.createdAt).toLocaleDateString()}
-        </Text>
-      </View>
-      <View style={styles.infoRow}>
-        <Text style={styles.infoLabel}>Email: </Text>
-        <Text style={styles.infoValue}>{item.customerEmail}</Text>
-      </View>
-      {item.customerPhone && (
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Phone: </Text>
-          <Text style={styles.infoValue}>{item.customerPhone}</Text>
-        </View>
-      )}
-      {item.propertyName && (
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Property: </Text>
-          <Text style={styles.infoValue} numberOfLines={1}>
-            {item.propertyName}
-          </Text>
-        </View>
-      )}
-      <Text style={styles.message}>{item.message}</Text>
-      <Pressable
-        style={styles.statusPickerButton}
-        onPress={() => openStatusModal(item)}
-      >
-        <Text style={styles.statusPickerButtonText}>Status: </Text>
-        <View
-          style={[
-            styles.statusBadge,
-            { backgroundColor: getStatusColor(item.status) },
-          ]}
-        >
-          <Text style={styles.statusBadgeText}>
-            {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-          </Text>
-        </View>
-        <Text style={styles.statusPickerButtonText}> (Change)</Text>
-      </Pressable>
-    </View>
-  );
+  const renderItem = useCallback(({ item }) => (<InquiryCard item={item} onStatusPress={openStatusUpdateModal} />), []);
 
   return (
     <View style={styles.container}>
       <Header navigation={navigation} title="Inquiries" />
+      <InquiryFilters
+        activeTab={activeTab}
+        onTabChange={handleTabPress}
+        onMorePress={() => setMoreFiltersVisible(true)}
+        onDateFilterPress={() => setDateModalVisible(true)}
+        isDateFilterActive={dateFilter !== "all"}
+      />
 
-      {/* Status Tabs */}
-      <View style={styles.tabsContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {TABS.map((tab) => (
-            <Pressable
-              key={tab.value}
-              style={[styles.tab, activeTab === tab.value && styles.activeTab]}
-              onPress={() => handleTabPress(tab.value)}
-            >
-              <Text
-                style={[
-                  styles.tabText,
-                  activeTab === tab.value && styles.activeTabText,
-                ]}
-              >
-                {tab.label}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Date Filter */}
-      <Pressable
-        style={styles.dateFilterButton}
-        onPress={() => setDateModalVisible(true)}
-      >
-        <Text style={styles.dateFilterText}>
-          Filter:{" "}
-          {DATE_FILTER_OPTIONS.find((opt) => opt.value === dateFilter)?.label}
-        </Text>
-        <Text style={styles.dateFilterIcon}>▼</Text>
-      </Pressable>
-
-      {loading && !refreshing && !loadingMore ? ( // --- MODIFIED: Don't show full loader when loading more
-        <ActivityIndicator
-          size="large"
-          color={colors.primary}
-          style={styles.loader}
-        />
+      {loading && !refreshing && !loadingMore ? (
+        <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
       ) : (
         <FlatList
           data={inquiries}
           renderItem={renderItem}
           keyExtractor={(item) => item._id}
           contentContainerStyle={styles.list}
+          // --- MODIFIED: Enhanced Empty State ---
           ListEmptyComponent={
-            <Text style={styles.emptyText}>No inquiries found.</Text>
+            <View style={styles.emptyContainer}>
+               <Ionicons name="chatbubbles-outline" size={48} color={colors.muted} />
+               <Text style={styles.emptyText}>No inquiries found.</Text>
+            </View>
           }
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          // --- ADDED: Pagination props ---
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}
-          ListFooterComponent={
-            loadingMore ? (
-              <ActivityIndicator
-                style={{ margin: 20 }}
-                color={colors.primary}
-              />
-            ) : null
-          }
+          ListFooterComponent={ loadingMore ? <ActivityIndicator style={{ margin: 20 }} color={colors.primary} /> : null }
         />
       )}
 
-      {/* Date Filter Modal */}
-      <PickerModal
-        visible={isDateModalVisible}
-        options={DATE_FILTER_OPTIONS}
-        onClose={() => setDateModalVisible(false)}
-        onSelect={handleDateFilterChange}
-        title="Select Date Range"
-      />
-
-      {/* Status Update Modal */}
-      <PickerModal
-        visible={isStatusModalVisible}
-        options={STATUS_OPTIONS}
-        onClose={() => setStatusModalVisible(false)}
-        onSelect={handleChangeStatus}
-        title="Update Inquiry Status"
-      />
+      {/* Modals (Unchanged) */}
+      <PickerModal visible={isDateModalVisible} options={DATE_FILTER_OPTIONS} onClose={() => setDateModalVisible(false)} onSelect={handleDateFilterChange} title="Select Date Range" />
+      <PickerModal visible={isMoreFiltersVisible} options={MORE_TAB_OPTIONS} onClose={() => setMoreFiltersVisible(false)} onSelect={handleMoreTabChange} title="More Statuses" value={activeTab} />
+      <PickerModal visible={isStatusUpdateModalVisible} options={STATUS_OPTIONS} onClose={() => setStatusUpdateModalVisible(false)} onSelect={handleStatusUpdate} title="Update Inquiry Status" />
     </View>
   );
 }
 
+// --- MODIFIED: Polished Styles ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.light,
-  },
-  tabsContainer: {
-    flexDirection: "row",
-    backgroundColor: colors.white,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  tab: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    marginHorizontal: 4,
-  },
-  activeTab: {
-    backgroundColor: colors.primary,
-  },
-  tabText: {
-    color: colors.text,
-    fontWeight: "600",
-  },
-  activeTabText: {
-    color: colors.white,
-  },
-  dateFilterButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.white,
-    padding: 12,
-    margin: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  dateFilterText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: colors.text,
-  },
-  dateFilterIcon: {
-    marginLeft: 8,
-    color: colors.text,
+    backgroundColor: colors.light, // Consistent light background
   },
   loader: {
     flex: 1,
@@ -444,92 +374,196 @@ const styles = StyleSheet.create({
   },
   list: {
     paddingHorizontal: 16,
+    paddingTop: 16,
     paddingBottom: 20,
+  },
+   // --- NEW: Enhanced Empty State ---
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 80, // Adjust as needed
   },
   emptyText: {
     textAlign: "center",
-    marginTop: 50,
+    marginTop: 16,
     fontSize: 16,
-    color: colors.grey,
+    color: colors.muted, // Use muted color
   },
+
+  // --- MODIFIED: InquiryFilters Styles ---
+  tabsContainer: {
+    flexDirection: "row",
+    alignItems: "center", // Vertically align items
+    backgroundColor: "#F9FAFB",
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  tabScroller: {
+    flex: 1,
+  },
+  tab: {
+    paddingVertical: 12, // Slightly reduced padding
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: 'center', // Center content vertically
+    minHeight: 48, // Ensure consistent height with button
+     borderRadius: 8, // Added subtle rounding
+     marginVertical: 4, // Add vertical margin for background highlight
+     marginHorizontal: 2, // Add horizontal margin for background highlight
+  },
+   // --- NEW: Active Tab Background ---
+   activeTabHighlight: {
+     backgroundColor: colors.light, // Use light background for highlight
+   },
+  tabText: {
+    color: colors.textSecondary,
+    fontWeight: "500",
+    fontSize: 14,
+  },
+  activeTabText: {
+    color: colors.primary,
+  },
+  activeTabIndicator: {
+    height: 3, // Slightly thicker underline
+    backgroundColor: colors.primary,
+    position: "absolute",
+    bottom: 0,
+    left: 16,
+    right: 16,
+    borderRadius: 1.5, // Rounded ends
+  },
+  dateFilterButton: {
+    paddingHorizontal: 16,
+    height: 48, // Match tab height
+    justifyContent: 'center', // Center icon vertically
+    alignItems: 'center',
+  },
+  dateFilterBadge: {
+    position: "absolute",
+    top: 10, // Adjusted position
+    right: 12, // Adjusted position
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.danger,
+  },
+
+  // --- MODIFIED: Polished InquiryCard Styles ---
   card: {
     backgroundColor: colors.white,
     borderRadius: 12,
-    padding: 16,
     marginBottom: 16,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 }, // Reduced shadow offset
+    shadowOpacity: 0.08, // Slightly more visible shadow
+    shadowRadius: 3, // Reduced shadow radius
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingBottom: 10,
-    marginBottom: 10,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8, // Reduced padding
   },
   cardTitle: {
     fontSize: 18,
-    fontWeight: "bold",
+    fontWeight: "600", // Slightly bolder
     color: colors.text,
     flex: 1,
+    marginRight: 8, // Add margin if date is long
   },
   cardDate: {
     fontSize: 13,
-    color: colors.grey,
+    color: colors.textSecondary, // Use secondary text color
+  },
+  cardPropertyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    marginTop: 4, // Add slight margin
+  },
+  cardPropertyIcon: {
+    color: colors.textSecondary,
+    width: 20,
+    textAlign: "center",
+  },
+  cardPropertyText: {
+    fontSize: 14,
+    fontWeight: "600", // Bolder
+    color: colors.text, // Use primary text color
+    flex: 1,
+  },
+  infoSection: {
+    paddingTop: 12, // Reduced top padding
+    paddingBottom: 4, // Reduced bottom padding
+    paddingHorizontal: 16,
+    gap: 12,
   },
   infoRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 5,
+    gap: 10, // Increased gap
   },
-  infoLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.text,
+  infoIconActionable: {
+    color: colors.primary, // Use primary color for actionable icons
+    width: 20,
+    textAlign: "center",
+  },
+  infoIconMuted: {
+    color: colors.muted,
+    width: 20,
+    textAlign: "center",
   },
   infoValue: {
     fontSize: 14,
     color: colors.textSecondary,
     flex: 1,
   },
+  messageContainer: {
+    flexDirection: "row",
+    paddingHorizontal: 16,
+    paddingTop: 8, // Reduced top padding
+    paddingBottom: 16,
+    alignItems: "flex-start",
+    gap: 10, // Increased gap
+  },
   message: {
     fontSize: 14,
     color: colors.textSecondary,
-    marginTop: 10,
     fontStyle: "italic",
     lineHeight: 20,
+    flex: 1,
   },
-  statusPickerButton: {
+  cardFooter: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    padding: 12, // Reduced padding
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: "#F9FAFB",
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+  },
+  statusButton: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 15,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    gap: 6,
     borderRadius: 8,
-    backgroundColor: colors.light,
-    alignSelf: "flex-start",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
-  statusPickerButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.text,
-  },
-  statusBadge: {
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    marginLeft: 4,
-    marginRight: 4,
-  },
-  statusBadgeText: {
+  statusButtonText: {
     color: colors.white,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "bold",
-    textTransform: "uppercase",
   },
 });

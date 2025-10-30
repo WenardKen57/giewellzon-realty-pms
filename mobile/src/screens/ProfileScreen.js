@@ -9,20 +9,122 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { useFocusEffect, useNavigation } from "@react-navigation/native"; // Import useNavigation
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { getMe, changePassword, updateMe } from "../api/users";
 import Header from "../components/Header";
 import { colors } from "../theme/colors";
 import { notifySuccess, notifyError } from "../utils/notify";
-import { useAuth } from "../providers/AuthProvider"; // Import useAuth
+import { useAuth } from "../providers/AuthProvider";
+import { Ionicons } from "@expo/vector-icons";
+
+// --- NEW: Helper to get initials ---
+const getInitials = (name) => {
+  if (!name) return "A"; // Admin fallback
+  const parts = name.split(" ");
+  if (parts.length === 1) return name.charAt(0).toUpperCase();
+  return (
+    parts[0].charAt(0).toUpperCase() + parts[parts.length - 1].charAt(0).toUpperCase()
+  );
+};
+
+// --- NEW: Profile Hero Component ---
+// Features a small, professional initials circle
+function ProfileHero({ name, email }) {
+  return (
+    <View style={styles.heroContainer}>
+      <View style={styles.initialsCircle}>
+        <Text style={styles.initialsText}>{getInitials(name)}</Text>
+      </View>
+      <View style={styles.heroTextContainer}>
+        <Text style={styles.heroName}>{name || "Admin User"}</Text>
+        <Text style={styles.heroEmail}>{email}</Text>
+      </View>
+    </View>
+  );
+}
+
+// --- NEW: Premium Input Row Component ---
+// This mimics a native settings list item (label on left, input on right)
+function ProfileInputRow({
+  icon,
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  secureTextEntry,
+  keyboardType,
+  editable = true,
+  lastItem = false,
+}) {
+  return (
+    <View>
+      <View style={styles.rowContainer}>
+        <View style={styles.rowLeft}>
+          <Ionicons
+            name={icon}
+            size={22}
+            style={[
+              styles.rowIcon,
+              !editable && styles.rowIconDisabled, // Mute icon if non-editable
+            ]}
+          />
+          <Text style={styles.rowLabel}>{label}</Text>
+        </View>
+        <TextInput
+          style={[
+            styles.rowInput,
+            !editable && styles.rowInputDisabled,
+            editable && styles.rowInputActive,
+          ]}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={colors.muted}
+          secureTextEntry={secureTextEntry}
+          keyboardType={keyboardType}
+          editable={editable}
+          autoCapitalize="none"
+        />
+      </View>
+      {/* --- NEW: Inset separator --- */}
+      {!lastItem && <View style={styles.separator} />}
+    </View>
+  );
+}
+
+// --- NEW: Form Group Component (Title only) ---
+function FormGroup({ title }) {
+  return <Text style={styles.groupTitle}>{title}</Text>;
+}
+
+// --- NEW: Standalone Primary Button ---
+function PrimaryButton({ title, onPress, loading, disabled }) {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.button,
+        (loading || disabled) && styles.buttonDisabled,
+        pressed && styles.buttonPressed,
+      ]}
+      onPress={onPress}
+      disabled={loading || disabled}
+    >
+      <Text style={styles.buttonText}>
+        {loading ? "Saving..." : title}
+      </Text>
+    </Pressable>
+  );
+}
 
 export default function ProfileScreen() {
-  const navigation = useNavigation(); // Get navigation hook
-  const { user: authUser, logout, refreshUserProfile } = useAuth(); // Get auth user and logout
-  const [user, setUser] = useState(authUser); // Initialize with auth user
+  const navigation = useNavigation();
+  const { user: authUser, refreshUserProfile } = useAuth(); // Removed logout
+  const [user, setUser] =useState(authUser);
   const [loading, setLoading] = useState(false);
+  // Separate loading states for each button
+  const [isProfileSaving, setIsProfileSaving] = useState(false);
+  const [isPasswordSaving, setIsPasswordSaving] = useState(false);
 
-  // --- UPDATED STATE: Added username ---
   const [form, setForm] = useState({
     username: authUser?.username || "",
     fullName: authUser?.fullName || "",
@@ -33,12 +135,12 @@ export default function ProfileScreen() {
     newPassword: "",
   });
 
+  // --- Start Unchanged Logic (except loading states) ---
   const loadUser = useCallback(async () => {
     setLoading(true);
     try {
       const userData = await getMe();
       setUser(userData);
-      // --- UPDATED: Load username into form ---
       setForm({
         username: userData.username || "",
         fullName: userData.fullName || "",
@@ -52,7 +154,6 @@ export default function ProfileScreen() {
     }
   }, []);
 
-  // *** CORRECTED useFocusEffect ***
   useFocusEffect(
     useCallback(() => {
       loadUser();
@@ -60,24 +161,20 @@ export default function ProfileScreen() {
   );
 
   const handleUpdateProfile = async () => {
-    // --- VALIDATION: Check for username ---
     if (!form.username || form.username.trim().length < 3) {
       notifyError("Username is required and must be at least 3 characters.");
       return;
     }
-    // ------------------------------------
-
-    setLoading(true);
+    setIsProfileSaving(true);
     try {
-      // 'form' state now includes username, matching the backend
       await updateMe(form);
       notifySuccess("Profile updated successfully!");
-      await refreshUserProfile(); // Refresh auth context user
-      loadUser(); // Refresh local screen user
+      await refreshUserProfile();
+      loadUser();
     } catch (error) {
       notifyError(error.response?.data?.message || "Failed to update profile.");
     } finally {
-      setLoading(false);
+      setIsProfileSaving(false);
     }
   };
 
@@ -86,7 +183,7 @@ export default function ProfileScreen() {
       notifyError("Please fill in both password fields.");
       return;
     }
-    setLoading(true);
+    setIsPasswordSaving(true);
     try {
       await changePassword(
         passwordForm.currentPassword,
@@ -99,7 +196,7 @@ export default function ProfileScreen() {
         error.response?.data?.message || "Failed to change password."
       );
     } finally {
-      setLoading(false);
+      setIsPasswordSaving(false);
     }
   };
 
@@ -110,6 +207,7 @@ export default function ProfileScreen() {
   const handlePasswordFormChange = (name, value) => {
     setPasswordForm((prev) => ({ ...prev, [name]: value }));
   };
+  // --- End Unchanged Logic ---
 
   if (loading && !user) {
     return (
@@ -126,102 +224,95 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
+      {/* --- MODIFIED: Header is simple --- */}
       <Header navigation={navigation} title="Profile" />
       <ScrollView contentContainerStyle={styles.content}>
         {user && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>My Profile</Text>
-            <Text style={styles.emailText}>{user.email}</Text>
+          <>
+            {/* --- NEW: Hero section --- */}
+            <ProfileHero name={form.fullName || user.username} email={user.email} />
 
-            {/* --- ADDED: Username Input --- */}
-            <Text style={styles.label}>Username*</Text>
-            <TextInput
-              style={styles.input}
-              value={form.username}
-              onChangeText={(val) => handleFormChange("username", val)}
-              placeholder="Your Username"
-              autoCapitalize="none"
-            />
-
-            <Text style={styles.label}>Full Name</Text>
-            <TextInput
-              style={styles.input}
-              value={form.fullName}
-              onChangeText={(val) => handleFormChange("fullName", val)}
-              placeholder="Your Full Name"
-            />
-
-            <Text style={styles.label}>Contact Number</Text>
-            <TextInput
-              style={styles.input}
-              value={form.contactNumber}
-              onChangeText={(val) => handleFormChange("contactNumber", val)}
-              placeholder="Your Contact Number"
-              keyboardType="phone-pad"
-            />
-            <Pressable
-              style={styles.button}
+            {/* --- MODIFIED: Using new FormGroup and Card/Row layout --- */}
+            <FormGroup title="Account Details" />
+            <View style={styles.card}>
+              <ProfileInputRow
+                icon="mail-outline"
+                label="Email"
+                value={user.email}
+                editable={false}
+              />
+              <ProfileInputRow
+                icon="at-outline"
+                label="Username"
+                value={form.username}
+                onChangeText={(val) => handleFormChange("username", val)}
+                placeholder="e.g. admin_user"
+              />
+              <ProfileInputRow
+                icon="person-outline"
+                label="Full Name"
+                value={form.fullName}
+                onChangeText={(val) => handleFormChange("fullName", val)}
+                placeholder="Your Full Name"
+              />
+              <ProfileInputRow
+                icon="call-outline"
+                label="Contact"
+                value={form.contactNumber}
+                onChangeText={(val) => handleFormChange("contactNumber", val)}
+                placeholder="Your Contact Number"
+                keyboardType="phone-pad"
+                lastItem={true} // No divider
+              />
+            </View>
+            <PrimaryButton
+              title="Save Profile"
               onPress={handleUpdateProfile}
-              disabled={loading}
-            >
-              <Text style={styles.buttonText}>
-                {loading ? "Saving..." : "Save Profile"}
-              </Text>
-            </Pressable>
-          </View>
+              loading={isProfileSaving}
+            />
+
+            {/* --- MODIFIED: Security Section --- */}
+            <FormGroup title="Security" />
+            <View style={styles.card}>
+              <ProfileInputRow
+                icon="lock-closed-outline"
+                label="Current Password"
+                secureTextEntry
+                value={passwordForm.currentPassword}
+                onChangeText={(val) =>
+                  handlePasswordFormChange("currentPassword", val)
+                }
+                placeholder="Required"
+              />
+              <ProfileInputRow
+                icon="key-outline"
+                label="New Password"
+                secureTextEntry
+                value={passwordForm.newPassword}
+                onChangeText={(val) =>
+                  handlePasswordFormChange("newPassword", val)
+                }
+                placeholder="Set new password"
+                lastItem={true} // No divider
+              />
+            </View>
+            <PrimaryButton
+              title="Update Password"
+              onPress={handleChangePassword}
+              loading={isPasswordSaving}
+            />
+          </>
         )}
-
-        <View style={[styles.card, { marginTop: 20 }]}>
-          <Text style={styles.cardTitle}>Change Password</Text>
-
-          <Text style={styles.label}>Current Password</Text>
-          <TextInput
-            style={styles.input}
-            secureTextEntry
-            value={passwordForm.currentPassword}
-            onChangeText={(val) =>
-              handlePasswordFormChange("currentPassword", val)
-            }
-            placeholder="Current Password"
-          />
-
-          <Text style={styles.label}>New Password</Text>
-          <TextInput
-            style={styles.input}
-            secureTextEntry
-            value={passwordForm.newPassword}
-            onChangeText={(val) => handlePasswordFormChange("newPassword", val)}
-            placeholder="New Password"
-          />
-
-          <Pressable
-            style={styles.button}
-            onPress={handleChangePassword}
-            disabled={loading}
-          >
-            <Text style={styles.buttonText}>
-              {loading ? "Updating..." : "Update Password"}
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* Logout Button added here for clarity */}
-        <Pressable
-          style={[styles.button, styles.logoutButton]}
-          onPress={logout}
-          disabled={loading}
-        >
-          <Text style={styles.buttonText}>Logout</Text>
-        </Pressable>
       </ScrollView>
     </View>
   );
 }
 
+// --- MODIFIED: Styles completely overhauled for a premium look ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.light,
+    backgroundColor: "#F2F2F7", // A very light grey, common in settings
   },
   loader: {
     flex: 1,
@@ -229,59 +320,122 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   content: {
-    padding: 16,
+    paddingBottom: 50,
+  },
+  // --- NEW: Hero Styles ---
+  heroContainer: {
+    padding: 20,
+    backgroundColor: colors.white,
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  initialsCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: colors.primary,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16,
+  },
+  initialsText: {
+    color: colors.white,
+    fontSize: 18,
+    fontWeight: "600",
+  },
+  heroTextContainer: {
+    flex: 1,
+  },
+  heroName: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: colors.text,
+  },
+  heroEmail: {
+    fontSize: 15,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  // --- NEW: FormGroup styles ---
+  groupTitle: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: colors.textSecondary,
+    textTransform: "uppercase",
+    paddingHorizontal: 16,
+    paddingTop: 32,
+    marginBottom: 8,
   },
   card: {
     backgroundColor: colors.white,
-    borderRadius: 12,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  cardTitle: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: colors.text,
-    marginBottom: 5,
-  },
-  emailText: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    color: colors.text,
-    fontWeight: "600",
-    marginBottom: 8,
-    marginTop: 10,
-  },
-  input: {
-    backgroundColor: colors.light,
+    borderRadius: 10,
+    marginHorizontal: 16,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
+    overflow: "hidden", // To clip children
   },
+  // --- NEW: ProfileInputRow styles ---
+  rowContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: "transparent",
+  },
+  rowLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  rowIcon: {
+    color: colors.primary,
+    marginRight: 16,
+    width: 24,
+  },
+  rowIconDisabled: {
+    color: colors.muted,
+  },
+  rowLabel: {
+    fontSize: 16,
+    color: colors.text,
+  },
+  rowInput: {
+    flex: 1,
+    fontSize: 16,
+    textAlign: "right",
+    padding: 0, // Remove default padding
+    marginLeft: 16,
+  },
+  rowInputActive: {
+    color: colors.primary,
+  },
+  rowInputDisabled: {
+    color: colors.textSecondary,
+  },
+  separator: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginLeft: 56, // Inset = 16 (padding) + 24 (icon) + 16 (margin)
+  },
+  // --- NEW: Standalone Button Styles ---
   button: {
     backgroundColor: colors.primary,
     padding: 15,
     borderRadius: 8,
     alignItems: "center",
-    marginTop: 20,
+    margin: 16, // Standalone margin
   },
   buttonText: {
     color: colors.white,
     fontSize: 16,
     fontWeight: "bold",
   },
-  logoutButton: {
-    backgroundColor: colors.secondary, // Use danger color
-    marginTop: 30,
-    marginBottom: 20,
+  buttonDisabled: {
+    backgroundColor: colors.muted,
+  },
+  buttonPressed: {
+    opacity: 0.8,
   },
 });
