@@ -135,7 +135,7 @@ export default function LoginScreen({ navigation }) {
            {/* Removed "Admin Login" title to match screenshot */}
 
           <UnderlineInput
-            label="EMAIL ADDRESS"
+            label="EMAIL ADDRESS OR USERNAME"
             value={emailOrUsername}
             onChangeText={setEmailOrUsername}
             placeholder="admin@giewellzon.com" // Example placeholder

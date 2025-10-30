@@ -31,7 +31,7 @@ export default function VerifyEmail() {
     <div className="min-h-[80vh] flex items-center justify-center">
       <form onSubmit={onVerify} className="w-full max-w-sm p-8 space-y-4 card">
         <h2 className="text-2xl font-semibold text-center">Verify Email</h2>
-        <p className="text-sm text-center text-neutral-600">Enter the OTP sent to <strong>{email}</strong></p>
+        <p className="text-sm text-center text-neutral-600">Enter the OTP sent to <strong>ADMIN</strong></p>
         <input className="tracking-widest text-center input" placeholder="OTP Code" value={otp} onChange={(e) => setOtp(e.target.value)} required />
         <button className="w-full btn btn-primary" disabled={loading}>{loading ? "Verifying..." : "Verify"}</button>
         <button className="w-full btn btn-outline" type="button" onClick={onResend}>Resend OTP</button>
