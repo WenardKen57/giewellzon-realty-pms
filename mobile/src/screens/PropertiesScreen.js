@@ -16,14 +16,14 @@ import {
 } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
-import { listProperties } from "../api/properties";
+import { listProperties, delProperty } from "../api/properties";
 import { getProvinces, getCities } from "../api/locations";
 import Header from "../components/Header";
 import FAB from "../components/FAB";
 import PickerModal from "../components/PickerModal";
 import EditPropertyModal from "../screens/modals/EditPropertyModal"; // Import the modal
 import { colors } from "../theme/colors";
-import { notifyError } from "../utils/notify";
+import { notifyError, notifySuccess } from "../utils/notify";
 import { toAbsoluteUrl } from "../api/client";
 
 // Enable LayoutAnimation for Android
@@ -61,7 +61,7 @@ export default function PropertiesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [filters, setFilters] = useState({
     search: "",
-    type: "",
+    propertyType: "",
     province: "",
     city: "",
   });
@@ -162,7 +162,7 @@ export default function PropertiesScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     setSearchQuery("");
-    setFilters({ search: "", type: "", province: "", city: "" });
+    setFilters({ search: "", propertyType: "", province: "", city: "" });
     setCities([]);
     try {
       const response = await listProperties({});
@@ -198,7 +198,7 @@ export default function PropertiesScreen() {
   };
 
   const handleClearFilters = () => {
-    setFilters({ search: "", type: "", province: "", city: "" });
+    setFilters({ search: "", propertyType: "", province: "", city: "" });
     setSearchQuery("");
     setCities([]);
   };
@@ -241,8 +241,22 @@ export default function PropertiesScreen() {
         {
           text: "Delete",
           style: "destructive",
-          onPress: () => {
-            notifyError("Delete functionality not yet implemented.");
+          onPress: async () => {
+            try {
+              // Call backend to delete
+              await delProperty(propertyId);
+
+              // Optimistically remove from UI
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              setProperties((prev) => prev.filter((p) => p._id !== propertyId));
+
+              notifySuccess("Property deleted successfully.");
+            } catch (error) {
+              console.error("Failed to delete property:", error);
+              notifyError(
+                error?.response?.data?.message || "Failed to delete property."
+              );
+            }
           },
         },
       ]
@@ -381,9 +395,9 @@ export default function PropertiesScreen() {
         </View>
 
         <View style={styles.badgeContainer}>
-          {filters.type ? (
+          {filters.propertyType ? (
             <View style={styles.badge}>
-              <Text style={styles.badgeText}>{getTypeLabel(filters.type)}</Text>
+              <Text style={styles.badgeText}>{getTypeLabel(filters.propertyType)}</Text>
             </View>
           ) : null}
           {filters.province ? (
@@ -407,7 +421,7 @@ export default function PropertiesScreen() {
             onPress={() => openModal("type")}
           >
             <Text style={styles.filterButtonText} numberOfLines={1}>
-              {PROPERTY_TYPES.find((pt) => pt.value === filters.type)?.label ||
+              {PROPERTY_TYPES.find((pt) => pt.value === filters.propertyType)?.label ||
                 "Select Type"}
             </Text>
             <Ionicons
@@ -521,7 +535,7 @@ export default function PropertiesScreen() {
         visible={modalVisible === "type"}
         options={PROPERTY_TYPES}
         onClose={() => setModalVisible(null)}
-        onSelect={(val) => handleFilterChange("type", val)}
+        onSelect={(val) => handleFilterChange("propertyType", val)}
         title="Select Property Type"
       />
       <PickerModal

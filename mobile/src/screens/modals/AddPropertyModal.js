@@ -440,6 +440,31 @@ function BasicInfoStep({
   locationRef,
   amenitiesRef,
 }) {
+  const [currentAmenity, setCurrentAmenity] = useState("");
+
+  useEffect(() => {
+    // keep currentAmenity empty when amenities change externally
+    setCurrentAmenity("");
+  }, [form.amenities]);
+
+  function handleAddAmenity() {
+    const trimmed = (currentAmenity || "").trim();
+    if (!trimmed) return setCurrentAmenity("");
+    if ((form.amenities || []).includes(trimmed)) return setCurrentAmenity("");
+    setForm((prev) => ({
+      ...prev,
+      amenities: [...(prev.amenities || []), trimmed],
+    }));
+    setCurrentAmenity("");
+  }
+
+  function handleRemoveAmenity(amenityToRemove) {
+    setForm((prev) => ({
+      ...prev,
+      amenities: (prev.amenities || []).filter((a) => a !== amenityToRemove),
+    }));
+  }
+
   return (
     <View style={styles.stepView}>
       <L label="Property Name*" error={errors.propertyName}>
@@ -522,19 +547,45 @@ function BasicInfoStep({
           onSubmitEditing={() => amenitiesRef.current?.focus()}
         />
       </L>
-      <L label="Amenities (comma-separated)">
-        <T
-          ref={amenitiesRef}
-          value={form.amenities.join(", ")}
-          onChangeText={(v) =>
-            setForm((s) => ({
-              ...s,
-              amenities: v.split(",").map((a) => a.trim()).filter(Boolean),
-            }))
-          }
-          placeholder="e.g., Swimming Pool, Gym, Parking"
-          returnKeyType="done"
-        />
+      <L label="Amenities">
+        <View style={styles.amenityInputContainer}>
+          <T
+            ref={amenitiesRef}
+            value={currentAmenity}
+            onChangeText={setCurrentAmenity}
+            onSubmitEditing={handleAddAmenity}
+            placeholder="Type amenity and press +"
+            returnKeyType="done"
+            style={styles.amenityInput}
+          />
+          <Pressable
+            onPress={handleAddAmenity}
+            disabled={!currentAmenity.trim()}
+            style={[
+              styles.addButton,
+              !currentAmenity.trim() && styles.addButtonDisabled,
+            ]}
+          >
+            <Ionicons name="add-outline" size={20} color={colors.white} />
+          </Pressable>
+        </View>
+
+        <View style={styles.amenitiesList}>
+          {(form.amenities || []).length === 0 && (
+            <Text style={styles.noAmenitiesText}>No amenities added yet.</Text>
+          )}
+          {(form.amenities || []).map((amenity, idx) => (
+            <View key={`${amenity}-${idx}`} style={styles.amenityTag}>
+              <Text style={styles.amenityTagText}>{amenity}</Text>
+              <Pressable
+                onPress={() => handleRemoveAmenity(amenity)}
+                style={styles.removeButton}
+              >
+                <Ionicons name="close-circle" size={16} color={colors.danger} />
+              </Pressable>
+            </View>
+          ))}
+        </View>
       </L>
     </View>
   );
@@ -783,6 +834,15 @@ const styles = StyleSheet.create({
   infoText: { color: colors.textSecondary, fontSize: 14, lineHeight: 20, padding: 12, backgroundColor: colors.light, borderRadius: 8 },
   infoTextSm: { fontSize: 12, color: colors.textSecondary, textAlign: "center", marginTop: 4 },
   infoTextSmUrl: { color: colors.textSecondary, fontSize: 13, paddingLeft: 4, marginTop: -8 },
+  amenityInputContainer: { flexDirection: "row", alignItems: "center", gap: 8 },
+  amenityInput: { flex: 1 },
+  addButton: { backgroundColor: colors.primary, width: 44, height: 44, borderRadius: 8, justifyContent: "center", alignItems: "center" },
+  addButtonDisabled: { backgroundColor: colors.muted, opacity: 0.7 },
+  amenitiesList: { flexDirection: "row", flexWrap: "wrap", marginTop: 10, gap: 8 },
+  amenityTag: { flexDirection: "row", alignItems: "center", backgroundColor: colors.light, borderRadius: 15, paddingVertical: 5, paddingLeft: 10, paddingRight: 5, borderWidth: 1, borderColor: colors.border },
+  amenityTagText: { color: colors.textSecondary, fontSize: 13, marginRight: 4 },
+  removeButton: { padding: 2 },
+  noAmenitiesText: { fontSize: 13, color: colors.textSecondary, fontStyle: "italic" },
   thumbPicker: { width: "100%", height: 180, borderRadius: 10, borderWidth: 2, borderColor: colors.border, borderStyle: "dashed", backgroundColor: colors.light, justifyContent: "center", alignItems: "center", overflow: "hidden" },
   thumbPlaceholder: { alignItems: "center" },
   thumbPlaceholderText: { fontSize: 15, fontWeight: "600", color: colors.textSecondary, marginTop: 8 },

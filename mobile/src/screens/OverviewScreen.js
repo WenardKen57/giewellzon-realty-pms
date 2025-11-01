@@ -211,6 +211,17 @@ export default function OverviewScreen() {
     ]).start();
   };
 
+  // Compute sold units fallback in case backend doesn't supply `soldUnits`
+  const computedSoldUnits = React.useMemo(() => {
+    if (!stats) return 0;
+    if (typeof stats.soldUnits === "number") return stats.soldUnits;
+    const total = stats.totalUnits || 0;
+    const available = stats.availableUnits || 0;
+    const rented = stats.rentedUnits || 0;
+    const calc = total - available - rented;
+    return calc >= 0 ? calc : 0;
+  }, [stats]);
+
   const loadData = useCallback(async () => {
     if (!refreshing) {
       setLoading(true);
@@ -300,7 +311,7 @@ export default function OverviewScreen() {
                 />
                 <KpiCard
                   title="Units Sold"
-                  value={stats?.soldUnits || 0}
+                  value={computedSoldUnits}
                   icon="flag-outline"
                   color={colors.warning}
                 />
