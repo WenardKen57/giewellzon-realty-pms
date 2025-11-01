@@ -220,6 +220,14 @@ export default function PropertyDetailsScreen() {
           {property.street && `, ${property.street}`}
         </Text>
 
+        {/* --- Property Type --- */}
+        {property.propertyType ? (
+          <Text style={styles.type}>
+            {property.propertyType.charAt(0).toUpperCase() +
+              property.propertyType.slice(1)}
+          </Text>
+        ) : null}
+
         {/* --- REMOVED Price (Now per unit) --- */}
         {/* <Text style={styles.price}>...</Text> */}
 
@@ -491,6 +499,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     flexDirection: "row", // Align icon and text
     alignItems: "center",
+  },
+  type: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 12,
+    textTransform: "capitalize",
   },
   price: {
     // Keep style even if element is removed, for consistency
