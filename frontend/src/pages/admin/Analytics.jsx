@@ -42,8 +42,12 @@ function linearRegression(data, yKey) {
 export default function Analytics() {
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
+  const [period, setPeriod] = useState("monthly"); // monthly | quarterly
   const [trendStatus, setTrendStatus] = useState("closed");
   const [trendDateField, setTrendDateField] = useState("closingDate");
+  const [dateMode, setDateMode] = useState("year"); // 'year' | 'range'
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const [dash, setDash] = useState({});
   const [trend, setTrend] = useState([]);
@@ -64,12 +68,25 @@ export default function Analytics() {
           await Promise.all([
             AnalyticsAPI.dashboard(),
             AnalyticsAPI.salesTrends({
-              year,
+              // If date range mode, pass dateFrom/dateTo, otherwise pass year
+              ...(dateMode === "range"
+                ? { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }
+                : { year }),
+              period,
               status: trendStatus,
               dateField: trendDateField,
             }),
-            AnalyticsAPI.propertyPerformance(),
-            AnalyticsAPI.agentPerformance({ status: "closed" }),
+            AnalyticsAPI.propertyPerformance({
+              ...(dateMode === "range"
+                ? { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, dateField: trendDateField }
+                : {}),
+            }),
+            AnalyticsAPI.agentPerformance({
+              status: "closed",
+              ...(dateMode === "range"
+                ? { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, dateField: trendDateField }
+                : {}),
+            }),
           ]);
 
         if (!isMounted) return;
@@ -96,36 +113,62 @@ export default function Analytics() {
       isMounted = false;
       clearTimeout(timer);
     };
-  }, [year, trendStatus, trendDateField]);
+  }, [year, period, trendStatus, trendDateField, dateMode, dateFrom, dateTo]);
 
   // Derived data
-  const monthlyTrendData = useMemo(() => {
+  const trendDataShaped = useMemo(() => {
+    // Shape the trends for chart based on selected period
     if (!trend || trend.length === 0) {
+      if (period === "quarterly") {
+        return [1, 2, 3, 4].map((q) => ({ label: `Q${q}`, sales: 0, revenue: 0 }));
+      }
       return Array.from({ length: 12 }).map((_, i) => ({
-        month: `M${i + 1}`,
+        label: `M${i + 1}`,
         sales: 0,
         revenue: 0,
       }));
     }
+
+    // Determine if multiple years present
+    const years = new Set(trend.map((t) => t.year).filter(Boolean));
+    const multiYear = years.size > 1;
+
+    if (period === "quarterly") {
+      const qMap = new Map(
+        [1, 2, 3, 4].map((q) => [q, { label: `Q${q}`, sales: 0, revenue: 0 }])
+      );
+      trend.forEach((t) => {
+        if (t.quarter) {
+          qMap.set(t.quarter, {
+            label: multiYear ? `Y${t.year} Q${t.quarter}` : `Q${t.quarter}`,
+            sales: t.count || 0,
+            revenue: t.totalRevenue || 0,
+          });
+        }
+      });
+      return Array.from(qMap.values());
+    }
+
+    // monthly
     const monthMap = new Map();
     for (let i = 1; i <= 12; i++) {
-      monthMap.set(i, { month: `M${i}`, sales: 0, revenue: 0 });
+      monthMap.set(i, { label: `M${i}`, sales: 0, revenue: 0 });
     }
     trend.forEach((m) => {
       if (m.month) {
         monthMap.set(m.month, {
-          month: `M${m.month}`,
+          label: multiYear ? `Y${m.year} M${m.month}` : `M${m.month}`,
           sales: m.count || 0,
           revenue: m.totalRevenue || 0,
         });
       }
     });
     return Array.from(monthMap.values());
-  }, [trend]);
+  }, [trend, period]);
 
-  const monthlyTrendWithProjection = useMemo(
-    () => linearRegression(monthlyTrendData, "revenue"),
-    [monthlyTrendData]
+  const trendWithProjection = useMemo(
+    () => linearRegression(trendDataShaped, "revenue"),
+    [trendDataShaped]
   );
 
   const unitStatusDistribution = useMemo(
@@ -144,26 +187,26 @@ export default function Analytics() {
 
   // --- Chart.js data & options
   const barLineData = {
-    labels: monthlyTrendWithProjection.map((d) => d.month),
+    labels: trendWithProjection.map((d) => d.label),
     datasets: [
       {
         type: "bar",
         label: "Sales Count",
-        data: monthlyTrendWithProjection.map((d) => d.sales),
+        data: trendWithProjection.map((d) => d.sales),
         backgroundColor: "#4F46E5",
         yAxisID: "ySales",
       },
       {
         type: "bar",
         label: "Revenue",
-        data: monthlyTrendWithProjection.map((d) => d.revenue),
+        data: trendWithProjection.map((d) => d.revenue),
         backgroundColor: "#10B981",
         yAxisID: "yRevenue",
       },
       {
         type: "line",
         label: "Projected Revenue",
-        data: monthlyTrendWithProjection.map((d) => d.projected),
+        data: trendWithProjection.map((d) => d.projected),
         borderColor: "#F59E0B",
         borderWidth: 2,
         fill: false,
@@ -195,7 +238,7 @@ export default function Analytics() {
         },
       },
       x: {
-        title: { display: true, text: "Month" },
+        title: { display: true, text: period === "quarterly" ? "Quarter" : "Month" },
       },
     },
     plugins: {
@@ -261,20 +304,69 @@ export default function Analytics() {
         </div>
         <div className="flex flex-wrap gap-4 items-center">
           <label className="flex items-center gap-2">
-            <span className="text-sm font-medium">Year:</span>
+            <span className="text-sm font-medium">Date Mode:</span>
             <select
-              className="input w-28"
-              value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
+              className="input w-36"
+              value={dateMode}
+              onChange={(e) => setDateMode(e.target.value)}
               disabled={loading}
             >
-              {Array.from({ length: 5 }, (_, i) => currentYear - i).map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
+              <option value="year">By Year</option>
+              <option value="range">By Range</option>
             </select>
           </label>
+          <label className="flex items-center gap-2">
+            <span className="text-sm font-medium">Period:</span>
+            <select
+              className="input w-36"
+              value={period}
+              onChange={(e) => setPeriod(e.target.value)}
+              disabled={loading}
+            >
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
+            </select>
+          </label>
+          {dateMode === "year" ? (
+            <label className="flex items-center gap-2">
+              <span className="text-sm font-medium">Year:</span>
+              <select
+                className="input w-28"
+                value={year}
+                onChange={(e) => setYear(Number(e.target.value))}
+                disabled={loading}
+              >
+                {Array.from({ length: 5 }, (_, i) => currentYear - i).map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <>
+              <label className="flex items-center gap-2">
+                <span className="text-sm font-medium">From:</span>
+                <input
+                  type="date"
+                  className="input"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  disabled={loading}
+                />
+              </label>
+              <label className="flex items-center gap-2">
+                <span className="text-sm font-medium">To:</span>
+                <input
+                  type="date"
+                  className="input"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  disabled={loading}
+                />
+              </label>
+            </>
+          )}
           <label className="flex items-center gap-2">
             <span className="text-sm font-medium">Status:</span>
             <select
@@ -322,6 +414,7 @@ export default function Analytics() {
           title="Commission Paid (Closed)"
           value={formatCurrency(dash.totalCommissionPaid)}
         />
+        <Kpi title="Total Inquiries" value={dash.totalInquiries ?? 0} />
         <Kpi title="Pending Inquiries" value={dash.pendingInquiries ?? 0} />
       </div>
 
