@@ -14,6 +14,7 @@ async function dashboard(req, res, next) {
       unitCounts, // Get counts for different unit statuses in one go
       closedSalesAgg, // Aggregate only CLOSED sales
       pendingInquiriesCount,
+      totalInquiriesCount,
     ] = await Promise.all([
       Property.countDocuments({}),
       Unit.aggregate([
@@ -48,6 +49,7 @@ async function dashboard(req, res, next) {
       Inquiry.countDocuments({
         status: { $nin: ["closed", "cancelled", "archived", "handled"] },
       }), // Refined pending status definition
+      Inquiry.countDocuments({}),
     ]);
 
     // Process Unit Counts
@@ -77,6 +79,7 @@ async function dashboard(req, res, next) {
       avgClosedSalePrice: avgSalePrice, // Clarified name
       totalCommissionPaid: totalCommission, // Clarified name
       pendingInquiries: pendingInquiriesCount,
+      totalInquiries: totalInquiriesCount,
     });
   } catch (e) {
     next(e);
@@ -99,12 +102,23 @@ async function salesTrends(req, res, next) {
     const matchQuery = {
       softDeleted: false,
       status: status, // Filter by status (default 'closed')
-      [dateFieldName === "$saleDate" ? "saleDate" : "closingDate"]: {
-        // Filter date based on selection
+      // Date filter set below based on year or dateFrom/dateTo
+    };
+
+    // Allow explicit date range slicing via dateFrom/dateTo (overrides year)
+    const dateKey = dateField === "saleDate" ? "saleDate" : "closingDate";
+    const { dateFrom, dateTo } = req.query;
+    if (dateFrom || dateTo) {
+      matchQuery[dateKey] = {};
+      if (dateFrom) matchQuery[dateKey].$gte = new Date(dateFrom);
+      if (dateTo) matchQuery[dateKey].$lte = new Date(dateTo);
+    } else {
+      // Default to entire year if no explicit range provided
+      matchQuery[dateKey] = {
         $gte: new Date(`${year}-01-01T00:00:00.000Z`),
         $lte: new Date(`${year}-12-31T23:59:59.999Z`),
-      },
-    };
+      };
+    }
 
     let groupBy;
     let sortOrder = { "_id.year": 1 }; // Default sort
@@ -172,6 +186,10 @@ async function salesTrends(req, res, next) {
 // Aggregates sales and unit data per Property (Building).
 async function propertyPerformance(req, res, next) {
   try {
+    const { dateFrom, dateTo } = req.query;
+    const salesDateField =
+      req.query.dateField === "saleDate" ? "saleDate" : "closingDate";
+
     // 1. Aggregated Unit Counts per Property
     const unitCountsAgg = Unit.aggregate([
       {
@@ -190,8 +208,15 @@ async function propertyPerformance(req, res, next) {
     ]);
 
     // 2. Aggregated CLOSED Sales Stats per Property
+    const salesMatch = { softDeleted: false, status: "closed" };
+    if (dateFrom || dateTo) {
+      salesMatch[salesDateField] = {};
+      if (dateFrom) salesMatch[salesDateField].$gte = new Date(dateFrom);
+      if (dateTo) salesMatch[salesDateField].$lte = new Date(dateTo);
+    }
+
     const salesStatsAgg = Sale.aggregate([
-      { $match: { softDeleted: false, status: "closed" } },
+      { $match: salesMatch },
       {
         $group: {
           _id: "$propertyId",
