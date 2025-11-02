@@ -49,6 +49,7 @@ export default function UnitDetail() {
     price = 0,
     photos = [],
     videoTours = [],
+    amenities = [],
     description,
     property: propertyInfo, // Assuming .get() populates this like .list() does
   } = unit;
@@ -82,7 +83,7 @@ export default function UnitDetail() {
 
   return (
     <div className="py-6 container-page">
-      <div className="flex justify-between items-center mb-3">
+      <div className="flex items-center justify-between mb-3">
         <button onClick={() => history.back()} className="text-sm underline">
           &larr; Back
         </button>
@@ -113,7 +114,7 @@ export default function UnitDetail() {
               alt={unit.unitNumber || "Unit"}
             />
             <div className="absolute inset-0 flex items-center justify-center transition-opacity opacity-0 bg-black/30 group-hover:opacity-100">
-              <span className="text-white text-sm">Click to enlarge</span>
+              <span className="text-sm text-white">Click to enlarge</span>
             </div>
           </div>
 
@@ -196,6 +197,23 @@ export default function UnitDetail() {
             </div>
           )}
 
+          {/* Amenities */}
+          {amenities?.length > 0 && (
+            <div className="mt-6">
+              <h3 className="mb-2 font-medium">Amenities</h3>
+              <div className="flex flex-wrap gap-2">
+                {amenities.map((a, i) => (
+                  <span
+                    key={i}
+                    className="px-2 py-1 text-xs rounded bg-brand-light"
+                  >
+                    {a}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Description */}
           {description && (
             <div className="mt-6">
@@ -235,7 +253,7 @@ export default function UnitDetail() {
               e.stopPropagation();
               prev();
             }}
-            className="absolute left-4 text-white text-3xl hover:text-gray-300"
+            className="absolute text-3xl text-white left-4 hover:text-gray-300"
           >
             ‹
           </button>
@@ -250,7 +268,7 @@ export default function UnitDetail() {
               e.stopPropagation();
               next();
             }}
-            className="absolute right-4 text-white text-3xl hover:text-gray-300"
+            className="absolute text-3xl text-white right-4 hover:text-gray-300"
           >
             ›
           </button>
@@ -259,7 +277,7 @@ export default function UnitDetail() {
               e.stopPropagation();
               closeLightbox();
             }}
-            className="absolute top-4 right-4 text-2xl text-white hover:text-gray-300"
+            className="absolute text-2xl text-white top-4 right-4 hover:text-gray-300"
           >
             ✕
           </button>
