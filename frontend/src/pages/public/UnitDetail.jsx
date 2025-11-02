@@ -48,6 +48,7 @@ export default function UnitDetail() {
     specifications = {},
     price = 0,
     photos = [],
+    thumbnail,
     videoTours = [],
     amenities = [],
     description,

@@ -35,9 +35,20 @@ export const UnitsAPI = {
     return api.post(endpoints.units.uploadPhotos(id), fd).then((r) => r.data);
   },
 
+  uploadThumbnail: (id, file) => {
+    const fd = new FormData();
+    fd.append("thumbnail", file); // Use 'thumbnail' key
+    return api
+      .post(endpoints.units.uploadThumbnail(id), fd)
+      .then((r) => r.data);
+  },
+
   deletePhoto: (id, photoUrl) => {
     return api
       .delete(endpoints.units.photo(id), { data: { photoUrl } }) // Send URL in body
       .then((r) => r.data);
+  },
+  deleteThumbnail: (id) => {
+    return api.delete(endpoints.units.thumbnail(id)).then((r) => r.data);
   },
 };

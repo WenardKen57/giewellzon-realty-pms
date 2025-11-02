@@ -91,6 +91,7 @@ async function updateUnit(req, res, next) {
       "status",
       "specifications",
       "description",
+      "thumbnail",
     ];
     // Merge scalar fields into the patch object
     Object.assign(patch, pick(b, allowedScalars));
@@ -154,6 +155,30 @@ async function deleteUnit(req, res, next) {
 
 // --- UNIT MEDIA UPLOADS ---
 
+async function uploadUnitThumbnail(req, res, next) {
+  try {
+    if (!req.file || !req.file.buffer)
+      return res.status(400).json({ message: "No file provided" });
+
+    const result = await uploadBuffer(
+      req.file.buffer,
+      "units/thumbnails", // Separate folder
+      "image"
+    );
+    const url = result.secure_url;
+    const doc = await Unit.findByIdAndUpdate(
+      req.params.id,
+      { thumbnail: url }, // Set the new thumbnail field
+      { new: true }
+    );
+    if (!doc) return res.status(404).json({ message: "Unit not found" });
+    res.json(doc);
+  } catch (e) {
+    console.error("Error uploading unit thumbnail:", e);
+    next(e);
+  }
+}
+
 // Upload photos for a specific Unit
 // --- UPDATED: This now APPENDS photos instead of replacing ---
 async function uploadUnitPhotos(req, res, next) {
@@ -178,6 +203,20 @@ async function uploadUnitPhotos(req, res, next) {
     res.json(updatedDoc);
   } catch (e) {
     console.error("Error uploading unit photos:", e); // Log full error
+    next(e);
+  }
+}
+
+async function deleteUnitThumbnail(req, res, next) {
+  try {
+    const doc = await Unit.findByIdAndUpdate(
+      req.params.id,
+      { $set: { thumbnail: null } }, // Set thumbnail field to null
+      { new: true }
+    );
+    if (!doc) return res.status(404).json({ message: "Unit not found" });
+    res.json({ message: "Thumbnail removed", doc });
+  } catch (e) {
     next(e);
   }
 }
@@ -336,4 +375,6 @@ module.exports = {
   uploadUnitPhotos,
   listUnits, // This is the main search endpoint
   deleteUnitPhoto, // --- NEW EXPORT ---
+  uploadUnitThumbnail,
+  deleteUnitThumbnail,
 };

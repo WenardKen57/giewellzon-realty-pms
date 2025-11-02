@@ -56,9 +56,9 @@ const BLANK_FORM = {
     parking: "",
   },
   soldDate: "",
-  // New fields supported by backend schema
   amenities: [],
   videoTours: [],
+  thumbnail: "", // Ensure thumbnail is part of the form
 };
 
 export default function UnitEditor({ open, onClose, editing, propertyId }) {
@@ -67,13 +67,14 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // --- NEW Media State ---
-  // `existingPhotos` stores URLs from the `editing` object
-  const [existingPhotos, setExistingPhotos] = useState([]);
-  // `newPhotos` stores File objects selected by the user
-  const [newPhotos, setNewPhotos] = useState([]);
-  // `newPhotoPreviews` stores object URLs for previewing `newPhotos`
-  const [newPhotoPreviews, setNewPhotoPreviews] = useState([]);
+  // --- REFACTORED Media State ---
+  const [newThumbnail, setNewThumbnail] = useState(null); // The new File
+  const [thumbPreview, setThumbPreview] = useState(""); // URL for new File
+  const [existingThumbnail, setExistingThumbnail] = useState(""); // URL from editing.thumbnail
+
+  const [newPhotos, setNewPhotos] = useState([]); // Array of new Files
+  const [newPhotoPreviews, setNewPhotoPreviews] = useState([]); // URLs for new Files
+  const [existingPhotos, setExistingPhotos] = useState([]); // URLs from editing.photos
 
   useEffect(() => {
     if (open) {
@@ -83,43 +84,58 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
           ...s,
           ...editing,
           specifications: {
-            ...BLANK_FORM.specifications, // Start with blank specs
-            ...(editing.specifications || {}), // Apply editing specs
+            ...BLANK_FORM.specifications,
+            ...(editing.specifications || {}),
           },
           amenities: editing.amenities || [],
           videoTours: editing.videoTours || [],
         }));
-        // --- NEW ---
-        // Populate existing photos from the editing object
+        // --- NEW: Populate existing media ---
+        setExistingThumbnail(editing.thumbnail || "");
         setExistingPhotos(editing.photos || []);
       } else {
-        // Adding a new unit: reset the form and all media
+        // Adding a new unit: reset everything
         setForm(BLANK_FORM);
+        setErrors({});
+        setNewThumbnail(null);
+        setThumbPreview("");
+        setExistingThumbnail("");
         setNewPhotos([]);
         setExistingPhotos([]);
-        setErrors({});
       }
+    } else {
+      // --- NEW: Clear previews when modal closes ---
+      setNewThumbnail(null);
+      setThumbPreview("");
+      setNewPhotos([]);
     }
   }, [editing, open]);
 
-  // --- NEW: Create/revoke preview URLs for NEWLY selected photos ---
+  // Build preview URL for NEW thumbnail
   useEffect(() => {
-    // cleanup previous previews
+    if (!newThumbnail) {
+      setThumbPreview("");
+      return;
+    }
+    const url = URL.createObjectURL(newThumbnail);
+    setThumbPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [newThumbnail]);
+
+  // Build preview URLs for NEW photos
+  useEffect(() => {
     newPhotoPreviews.forEach((u) => URL.revokeObjectURL(u));
     if (!newPhotos || newPhotos.length === 0) {
       setNewPhotoPreviews([]);
       return;
     }
-    // Create new previews
     const urls = newPhotos.map((f) => URL.createObjectURL(f));
     setNewPhotoPreviews(urls);
-    // Cleanup on unmount or when newPhotos changes
     return () => urls.forEach((u) => URL.revokeObjectURL(u));
   }, [newPhotos]);
 
   if (!open) return null;
 
-  // Validation for Unit fields
   function validate() {
     const newErrors = {};
     if (!form.price || isNaN(Number(form.price)) || Number(form.price) <= 0)
@@ -127,7 +143,25 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
     return newErrors;
   }
 
-  // --- NEW: Remove an EXISTING photo (server-side) ---
+  // --- NEW: Remove existing thumbnail (server-side) ---
+  async function removeExistingThumb() {
+    if (!editing?._id) return;
+    if (!window.confirm("Remove existing thumbnail?")) return;
+    setDeleting(true);
+    try {
+      await UnitsAPI.deleteThumbnail(editing._id);
+      setExistingThumbnail("");
+      toast.info("Thumbnail removed.");
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.message || "Failed to remove thumbnail."
+      );
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  // --- NEW: Remove existing photo (server-side) ---
   async function removeExistingPhoto(photoUrl) {
     if (!editing?._id) return;
     if (!window.confirm("Remove this photo?")) return;
@@ -137,7 +171,6 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
       setExistingPhotos((s) => s.filter((p) => p !== photoUrl));
       toast.info("Photo removed.");
     } catch (err) {
-      console.error(err);
       toast.error(err?.response?.data?.message || "Failed to remove photo.");
     } finally {
       setDeleting(false);
@@ -153,8 +186,7 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
   const handlePhotoSelect = (e) => {
     const files = Array.from(e.target.files || []);
     setNewPhotos((s) => [...s, ...files]);
-    // Clear the input value to allow selecting the same file again
-    e.target.value = null;
+    e.target.value = null; // Allow re-selecting
   };
 
   async function save(e) {
@@ -168,7 +200,6 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
 
     const validationErrors = validate();
     setErrors(validationErrors);
-
     if (Object.keys(validationErrors).length > 0) {
       toast.error("Please fix the highlighted fields before saving.");
       return;
@@ -182,15 +213,14 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
         amenities: form.amenities || [],
         videoTours: form.videoTours || [],
       };
-      // --- MODIFIED: Remove photos from main payload ---
+      // Remove media fields from main payload
       delete payload.photos;
+      delete payload.thumbnail;
 
       let res;
       if (editing) {
-        // 1. Update text data
         res = await UnitsAPI.update(editing._id, payload);
       } else {
-        // 1. Create unit with text data
         if (!propertyId) {
           toast.error("No Property ID provided. Cannot create unit.");
           setLoading(false);
@@ -201,16 +231,21 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
 
       const id = res._id || editing._id;
 
-      // 2. Upload NEW photos (backend will append)
+      // --- REFACTORED: Separate thumbnail and photo uploads ---
+      if (newThumbnail) {
+        await UnitsAPI.uploadThumbnail(id, newThumbnail);
+      }
       if (newPhotos.length > 0) {
         await UnitsAPI.uploadPhotos(id, newPhotos);
-        setNewPhotos([]); // Clear the staging list
       }
+
+      setNewThumbnail(null);
+      setNewPhotos([]);
 
       toast.success(
         editing ? "Unit updated successfully!" : "Unit added successfully!"
       );
-      onClose(true); // Close modal and tell parent to refetch
+      onClose(true);
     } catch (err) {
       console.error(err);
       toast.error(err?.response?.data?.message || "Failed to save unit.");
@@ -226,7 +261,6 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
     }));
   }
 
-  // Match PropertyEditor behavior for adding amenities and video links
   function addAmenity() {
     const v = prompt("Amenity name:");
     if (v?.trim()) {
@@ -338,81 +372,144 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
           </div>
         </div>
 
-        {/* === UNIT MEDIA (Styled) === */}
-        <div className="pt-2">
-          <div className="mb-1 text-sm font-medium">Unit Photos</div>
-          <p className="text-xs text-gray-500 mb-2">
-            The first photo will be the main cover image. New photos will be
-            appended to the existing ones.
-          </p>
-
-          {/* Gallery Grid */}
-          <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 mb-3">
-            {/* Existing Photos */}
-            {existingPhotos.map((p, i) => (
-              <div
-                key={`existing-${i}`}
-                className="relative group aspect-square"
-              >
-                <img
-                  src={p}
-                  alt={`Existing photo ${i + 1}`}
-                  className="w-full h-full object-cover rounded-md border"
-                />
-                {i === 0 && (
-                  <div className="absolute bottom-0 left-0 w-full text-center bg-black/60 text-white text-[10px] py-0.5 rounded-b-md">
-                    Cover
-                  </div>
+        {/* === UNIT MEDIA (Styled & Separated) === */}
+        <div className="pt-2 space-y-4">
+          {/* --- Thumbnail Section --- */}
+          <div>
+            <div className="mb-1 text-sm font-medium">Unit Thumbnail</div>
+            <p className="text-xs text-gray-500 mb-2">
+              This is the main cover image for the unit.
+            </p>
+            <div className="flex items-center gap-4">
+              {/* Preview */}
+              <div className="relative w-24 h-16 bg-gray-100 rounded-md flex-shrink-0">
+                {thumbPreview || existingThumbnail ? (
+                  <img
+                    src={thumbPreview || existingThumbnail}
+                    alt={thumbPreview ? "New thumbnail" : "Existing thumbnail"}
+                    className="w-full h-full object-cover rounded-md"
+                  />
+                ) : (
+                  <span className="text-xs text-gray-400 flex items-center justify-center h-full">
+                    No image
+                  </span>
                 )}
-                <button
-                  type="button"
-                  className="absolute -top-1.5 -right-1.5 bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={() => removeExistingPhoto(p)}
-                  disabled={deleting}
-                  title="Remove this photo"
-                >
-                  <IconX />
-                </button>
               </div>
-            ))}
 
-            {/* New Photo Previews */}
-            {newPhotoPreviews.map((url, idx) => (
-              <div key={`new-${idx}`} className="relative group aspect-square">
-                <img
-                  src={url}
-                  alt={`New photo ${idx + 1}`}
-                  className="w-full h-full object-cover rounded-md border-2 border-blue-400"
-                />
-                <button
-                  type="button"
-                  className="absolute -top-1.5 -right-1.5 bg-gray-700 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={() => removeNewPhoto(idx)}
-                  title="Clear this selection"
-                >
-                  <IconX />
-                </button>
+              {/* Actions */}
+              <div className="flex-grow">
+                <label className="text-sm px-3 py-2 border rounded-md cursor-pointer hover:bg-gray-50">
+                  <span>
+                    {newThumbnail ? "Change selected" : "Select thumbnail"}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) =>
+                      setNewThumbnail(e.target.files?.[0] || null)
+                    }
+                  />
+                </label>
+
+                {newThumbnail && (
+                  <button
+                    type="button"
+                    className="ml-2 text-sm text-red-600 hover:underline"
+                    onClick={() => setNewThumbnail(null)}
+                  >
+                    Clear
+                  </button>
+                )}
+
+                {!newThumbnail && existingThumbnail && (
+                  <button
+                    type="button"
+                    className="ml-2 text-sm text-red-600 hover:underline"
+                    onClick={removeExistingThumb}
+                    disabled={deleting}
+                  >
+                    {deleting ? "..." : "Remove existing"}
+                  </button>
+                )}
               </div>
-            ))}
+            </div>
           </div>
 
-          {/* File Input Area */}
-          <label className="relative flex flex-col items-center justify-center w-full h-24 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition">
-            <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center">
-              <IconUploadCloud className="w-8 h-8 mb-2 text-gray-400" />
-              <p className="mb-1 text-sm text-gray-500">
-                <span className="font-semibold">Click to upload</span> or drag
-                and drop
-              </p>
+          {/* --- Photos Section --- */}
+          <div>
+            <div className="mb-1 text-sm font-medium">Additional Photos</div>
+            <p className="text-xs text-gray-500 mb-2">
+              Upload additional photos for the unit gallery. New photos will be
+              appended.
+            </p>
+
+            {/* Gallery Grid */}
+            <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 mb-3">
+              {/* Existing Photos */}
+              {existingPhotos.map((p, i) => (
+                <div
+                  key={`existing-${i}`}
+                  className="relative group aspect-square"
+                >
+                  <img
+                    src={p}
+                    alt={`Existing photo ${i + 1}`}
+                    className="w-full h-full object-cover rounded-md border"
+                  />
+                  <button
+                    type="button"
+                    className="absolute -top-1.5 -right-1.5 bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => removeExistingPhoto(p)}
+                    disabled={deleting}
+                    title="Remove this photo"
+                  >
+                    <IconX />
+                  </button>
+                </div>
+              ))}
+
+              {/* New Photo Previews */}
+              {newPhotoPreviews.map((url, idx) => (
+                <div
+                  key={`new-${idx}`}
+                  className="relative group aspect-square"
+                >
+                  <img
+                    src={url}
+                    alt={`New photo ${idx + 1}`}
+                    className="w-full h-full object-cover rounded-md border-2 border-blue-400"
+                  />
+                  <button
+                    type="button"
+                    className="absolute -top-1.5 -right-1.5 bg-gray-700 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => removeNewPhoto(idx)}
+                    title="Clear this selection"
+                  >
+                    <IconX />
+                  </button>
+                </div>
+              ))}
             </div>
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              onChange={handlePhotoSelect}
-            />
-          </label>
+
+            {/* File Input Area */}
+            <label className="relative flex flex-col items-center justify-center w-full h-24 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition">
+              <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center">
+                <IconUploadCloud className="w-8 h-8 mb-2 text-gray-400" />
+                <p className="mb-1 text-sm text-gray-500">
+                  <span className="font-semibold">Click to upload</span> or drag
+                  and drop
+                </p>
+              </div>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                onChange={handlePhotoSelect}
+              />
+            </label>
+          </div>
         </div>
 
         {/* === Video Tours (same style as PropertyEditor) === */}
@@ -534,7 +631,6 @@ function Spec({ label, value, onChange }) {
   );
 }
 
-// --- Local actions for amenities and video tours (match PropertyEditor behavior) ---
 function isValidYouTubeUrl(url) {
   if (!url) return false;
   try {
