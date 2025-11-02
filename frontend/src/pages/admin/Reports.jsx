@@ -142,7 +142,7 @@ function SalesReport() {
   const [dateMode, setDateMode] = useState("year");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [dash, setDash] = useState({});
+  const [dash, setDash] = useState({}); // For global totals
   const [trends, setTrends] = useState([]);
   const [properties, setProperties] = useState([]);
   const [agents, setAgents] = useState([]);
@@ -165,27 +165,24 @@ function SalesReport() {
     setVizLoading(true);
     setVizError(null);
 
+    const filters = {
+      ...(dateMode === "range" ? { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined } : { year }),
+      period,
+      status,
+      dateField,
+    };
+
     const run = async () => {
       try {
+        // [EDIT] Fetch dashboard *without* filters to get global totals
         const [d, t, p, a] = await Promise.all([
-          AnalyticsAPI.dashboard(),
-          AnalyticsAPI.salesTrends({
-            ...(dateMode === "range" ? { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined } : { year }),
-            period,
-            status,
-            dateField,
-          }),
-          AnalyticsAPI.propertyPerformance({
-            ...(dateMode === "range" ? { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, dateField } : {}),
-          }),
-          AnalyticsAPI.agentPerformance({
-            status,
-            dateField,
-            ...(dateMode === "range" ? { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined } : {}),
-          }),
+          AnalyticsAPI.dashboard(), // Global totals
+          AnalyticsAPI.salesTrends(filters),
+          AnalyticsAPI.propertyPerformance(filters),
+          AnalyticsAPI.agentPerformance(filters),
         ]);
         if (!active) return;
-        setDash(d || {});
+        setDash(d || {}); // This is now just for fallback/global
         setTrends(t?.trends || []);
         setProperties(p || []);
         setAgents(a || []);
@@ -206,6 +203,52 @@ function SalesReport() {
   }, [year, period, status, dateField, dateMode, dateFrom, dateTo]);
 
   // --- MEMOIZED DATA for Sales Tab ---
+
+  // [NEW] Calculate KPIs from filtered lists, not the 'dash' object
+  const kpiData = useMemo(() => {
+    // If filters are at default, use the global 'dash' object
+    const isFiltered = dateMode !== 'year' || period !== 'monthly' || status !== 'closed' || dateField !== 'closingDate';
+    
+    // Fallback to global dash if not filtered or lists are empty
+    if (!isFiltered && !vizLoading) {
+      return {
+        totalClosedRevenue: dash.totalClosedRevenue,
+        soldUnits: dash.soldUnits,
+        totalClosedSales: dash.totalClosedSales,
+        avgClosedSalePrice: dash.avgClosedSalePrice,
+        totalCommissionPaid: dash.totalCommissionPaid,
+      };
+    }
+
+    // Recalculate from filtered 'properties' and 'agents'
+    let totalRevenue = 0;
+    let totalSales = 0;
+    let totalCommission = 0;
+    
+    properties.forEach(p => {
+      totalRevenue += p.totalClosedRevenue || 0;
+      totalSales += p.totalClosedSales || 0;
+      totalCommission += p.totalCommissionPaid || 0; // Assuming this comes from property perf
+    });
+
+    // Note: 'soldUnits' might be harder to calculate from 'properties'
+    // if 'properties' only tracks closed sales. We'll use the 'totalSales'
+    // calculated from the list.
+    // If 'totalCommissionPaid' is not on 'properties', we can sum 'agents'
+    if (totalCommission === 0 && agents.length > 0) {
+       totalCommission = agents.reduce((acc, agent) => acc + (agent.totalCommission || 0), 0);
+    }
+
+    return {
+      totalClosedRevenue: totalRevenue,
+      soldUnits: totalSales, // Use calculated total sales
+      totalClosedSales: totalSales,
+      avgClosedSalePrice: totalSales > 0 ? totalRevenue / totalSales : 0,
+      totalCommissionPaid: totalCommission,
+    };
+  }, [dash, properties, agents, dateMode, period, status, dateField, vizLoading]);
+
+
   const shapedTrend = useMemo(() => {
     if (!trends || trends.length === 0) {
       if (period === "quarterly") return [1, 2, 3, 4].map((q) => ({ label: `Q${q}`, sales: 0, revenue: 0 }));
@@ -257,11 +300,12 @@ function SalesReport() {
   }), [topAgents]);
 
   const kpis = [
-    { title: "Total Revenue", value: dash.totalClosedRevenue, format: formatCurrency, color: "green", variant: "gradient" },
-    { title: "Sold Units", value: dash.soldUnits, color: "indigo", variant: "gradient" },
-    { title: "Closed Sales", value: dash.totalClosedSales, color: "blue", variant: "gradient" },
-    { title: "Average Sale Price", value: dash.avgClosedSalePrice, format: formatCurrency, color: "purple", variant: "gradient" },
-    { title: "Total Commission Paid", value: dash.totalCommissionPaid, format: formatCurrency, color: "amber", variant: "gradient" },
+    // [EDIT] KPIs now use the new 'kpiData' object
+    { title: "Total Revenue", value: kpiData.totalClosedRevenue, format: formatCurrency, color: "green", variant: "gradient" },
+    { title: "Sold Units", value: kpiData.soldUnits, color: "indigo", variant: "gradient" },
+    { title: "Closed Sales", value: kpiData.totalClosedSales, color: "blue", variant: "gradient" },
+    { title: "Average Sale Price", value: kpiData.avgClosedSalePrice, format: formatCurrency, color: "purple", variant: "gradient" },
+    { title: "Total Commission Paid", value: kpiData.totalCommissionPaid, format: formatCurrency, color: "amber", variant: "gradient" },
   ];
 
   const topPropOptions = {
@@ -284,7 +328,6 @@ function SalesReport() {
 
   return (
     <div className="space-y-6">
-      {/* [EDIT] Improved Filter Layout */}
       <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-end">
           <div className="flex items-center gap-2 col-span-1 md:col-span-2 lg:col-span-3 xl:col-span-4">
@@ -394,7 +437,7 @@ function SalesReport() {
  */
 function UnitsReport() {
   // --- STATE for Units Tab ---
-  const [dash, setDash] = useState({});
+  const [dash, setDash] = useState({}); // For global totals
   const [allProperties, setAllProperties] = useState([]); // Full list for dropdown
   const [filteredProperties, setFilteredProperties] = useState([]); // List for chart
   const [vizLoading, setVizLoading] = useState(true);
@@ -402,8 +445,6 @@ function UnitsReport() {
 
   const [propertyFilter, setPropertyFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  // [REMOVED] Unit Type filter state
-  // const [typeFilter, setTypeFilter] = useState("");
 
   // --- DATA FETCHING for Units Tab ---
   useEffect(() => {
@@ -411,19 +452,24 @@ function UnitsReport() {
     setVizLoading(true);
     setVizError(null);
 
+    const filters = {
+      propertyId: propertyFilter || undefined,
+      unitStatus: statusFilter || undefined,
+    };
+
     const run = async () => {
       try {
         const [d, p] = await Promise.all([
-          AnalyticsAPI.dashboard(),
-          AnalyticsAPI.propertyPerformance({
-            propertyId: propertyFilter || undefined,
-            unitStatus: statusFilter || undefined,
-            // [REMOVED] unitType
-          }),
+          AnalyticsAPI.dashboard(filters), // This gets filtered KPIs
+          AnalyticsAPI.propertyPerformance(filters), // This gets filtered properties
         ]);
+        
         if (!active) return;
+        
+        // Use filteredDashData for KPIs and Doughnut
         setDash(d || {});
         
+        // Set properties for Bar Chart
         if (allProperties.length === 0) {
           setAllProperties(p || []);
         }
@@ -443,9 +489,9 @@ function UnitsReport() {
     return () => {
       active = false;
     };
-  }, [propertyFilter, statusFilter]); // [REMOVED] typeFilter from dependencies
+  }, [propertyFilter, statusFilter]);
 
-  // Fetch all properties only once on mount for the dropdown
+  // Fetch all properties *once* on mount for the dropdown
   useEffect(() => {
     AnalyticsAPI.propertyPerformance({})
       .then(p => setAllProperties(p || []))
@@ -454,24 +500,45 @@ function UnitsReport() {
 
 
   // --- MEMOIZED DATA for Units Tab ---
+
+  const kpiData = useMemo(() => {
+    // [BUG FIX] Logic updated.
+    // If a property filter is set, *always* reduce the filteredProperties list.
+    if (propertyFilter) {
+      return filteredProperties.reduce(
+        (acc, prop) => {
+          acc.totalUnits += prop.totalUnits || 0;
+          acc.availableUnits += prop.availableUnits || 0;
+          acc.soldUnits += prop.soldUnits || 0;
+          acc.rentedUnits += prop.rentedUnits || 0;
+          return acc;
+        },
+        { totalUnits: 0, availableUnits: 0, soldUnits: 0, rentedUnits: 0 }
+      );
+    }
+    // Otherwise, use the 'dash' object (which is filtered by status, or global)
+    return dash;
+  }, [dash, filteredProperties, propertyFilter]);
+
+
+  // Doughnut chart should now ALSO reflect filters
   const unitStatusData = useMemo(() => {
     const items = [
-      { label: "Available", value: dash.availableUnits || 0, color: "#10B981" },
-      { label: "Sold", value: dash.soldUnits || 0, color: "#4F46E5" },
-      { label: "Rented", value: dash.rentedUnits || 0, color: "#F59E0B" },
+      { label: "Available", value: kpiData.availableUnits || 0, color: "#10B981" },
+      { label: "Sold", value: kpiData.soldUnits || 0, color: "#4F46E5" },
+      { label: "Rented", value: kpiData.rentedUnits || 0, color: "#F59E0B" },
     ].filter((i) => i.value > 0);
     return {
       labels: items.map((i) => i.label),
       datasets: [{ data: items.map((i) => i.value), backgroundColor: items.map((i) => i.color), borderColor: "#fff", borderWidth: 2 }],
     };
-  }, [dash]);
+  }, [kpiData]); // Depends on the new kpiData
 
   const chartProperties = useMemo(() => {
-    // [EDIT] If no property filter, show ALL properties. Otherwise, show the filtered list.
     if (propertyFilter) {
       return filteredProperties;
     }
-    return allProperties; // No longer slicing
+    return allProperties;
   }, [allProperties, filteredProperties, propertyFilter]);
 
   const unitStatusByPropData = useMemo(() => {
@@ -499,10 +566,10 @@ function UnitsReport() {
   };
 
   const kpis = [
-    { title: "Total Units", value: dash.totalUnits, icon: Building, color: "blue" },
-    { title: "Available Units", value: dash.availableUnits, icon: Home, color: "green" },
-    { title: "Sold Units", value: dash.soldUnits, icon: Package, color: "indigo" },
-    { title: "Rented Units", value: dash.rentedUnits, icon: KeyRound, color: "amber" },
+    { title: "Total Units", value: kpiData.totalUnits, icon: Building, color: "blue" },
+    { title: "Available Units", value: kpiData.availableUnits, icon: Home, color: "green" },
+    { title: "Sold Units", value: kpiData.soldUnits, icon: Package, color: "indigo" },
+    { title: "Rented Units", value: kpiData.rentedUnits, icon: KeyRound, color: "amber" },
   ];
 
   const doughnutOptions = {
@@ -520,12 +587,10 @@ function UnitsReport() {
   const handleClearUnitFilters = () => {
     setPropertyFilter("");
     setStatusFilter("");
-    // [REMOVED] setTypeFilter
   };
 
   return (
     <div className="space-y-6">
-      {/* [EDIT] Improved Filter Layout */}
       <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
           <div className="flex items-center gap-2 col-span-1 md:col-span-2 lg:col-span-3">
@@ -543,7 +608,6 @@ function UnitsReport() {
               value={propertyFilter}
               onChange={(e) => setPropertyFilter(e.target.value)}
             >
-              {/* [EDIT] Updated label */}
               <option value="">All Properties</option>
               {propertyOptions.map(prop => (
                 <option key={prop.id} value={prop.id}>{prop.name}</option>
@@ -564,8 +628,6 @@ function UnitsReport() {
               <option value="rented">Rented</option>
             </select>
           </label>
-          
-          {/* [REMOVED] Unit Type Filter */}
           
           <div>
             <span className="text-sm font-medium invisible">Clear</span>
@@ -589,12 +651,11 @@ function UnitsReport() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1">
-          <ChartCard title="Unit Status Distribution (Global)" vizLoading={vizLoading}>
+          <ChartCard title={propertyFilter || statusFilter ? "Unit Status (Filtered)" : "Unit Status (Global)"} vizLoading={vizLoading}>
             <Doughnut data={unitStatusData} options={doughnutOptions} />
           </ChartCard>
         </div>
         <div className="md:col-span-1 lg:col-span-2">
-          {/* [EDIT] Updated Chart Title */}
           <ChartCard title={propertyFilter ? "Unit Status for Selected Property" : "Unit Status by Property"} vizLoading={vizLoading}>
             <Bar data={unitStatusByPropData} options={unitStatusByPropOptions} />
           </ChartCard>
@@ -603,9 +664,6 @@ function UnitsReport() {
     </div>
   );
 }
-
-// [REMOVED] CsvExports component
-// ...
 
 // #endregion
 
@@ -628,7 +686,7 @@ export default function Reports() {
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6 bg-gray-50 min-h-screen">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Reports & Insights</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Reports & Insights</h1>
         <p className="text-sm text-gray-500">Admin / Reports</p>
       </div>
 
