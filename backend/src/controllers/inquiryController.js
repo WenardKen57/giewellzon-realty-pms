@@ -1,10 +1,18 @@
 const Inquiry = require("../models/Inquiry");
 const Property = require("../models/Property");
 const { safeSend } = require("../configs/mailer");
+const { isValidPHMobile } = require("../utils/validate");
 
 async function submitInquiry(req, res, next) {
   try {
     const b = req.body || {};
+    // Validate PH mobile if provided (optional field)
+    if (b.customerPhone && !isValidPHMobile(String(b.customerPhone))) {
+      return res.status(400).json({
+        message:
+          "Invalid phone number. Use PH mobile format like 09123456789 or +639123456789.",
+      });
+    }
     let propertyName;
     if (b.propertyId) {
       const p = await Property.findById(b.propertyId);
