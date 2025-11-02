@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom"; // Added useNavigate
 import { UnitsAPI } from "../../api/units";
 import { toast } from "react-toastify";
 import InquiryForm from "../../components/layout/InquiryForm"; // Assuming this path
@@ -19,15 +19,19 @@ function toEmbed(url) {
 }
 
 export default function UnitDetail() {
+  // *** 🚀 FIXED: Reverted back to `unitId` ***
   const { unitId } = useParams();
+  const navigate = useNavigate();
   const [unit, setUnit] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lightbox, setLightbox] = useState({ open: false, index: 0 });
 
   useEffect(() => {
+    // *** 🚀 FIXED: Check for `unitId` ***
     if (unitId) {
       setLoading(true);
-      UnitsAPI.get(unitId) // NOTE: Assuming UnitsAPI.get(id) exists
+      // *** 🚀 FIXED: Use `unitId` ***
+      UnitsAPI.get(unitId)
         .then((data) => {
           setUnit(data);
         })
@@ -39,6 +43,7 @@ export default function UnitDetail() {
           setLoading(false);
         });
     }
+    // *** 🚀 FIXED: Use `unitId` in dependency array ***
   }, [unitId]);
 
   if (loading) return <div className="py-10 container-page">Loading...</div>;
@@ -48,9 +53,9 @@ export default function UnitDetail() {
     specifications = {},
     price = 0,
     photos = [],
-    videoTours = [],
+    // videoTours = [], // This is for unit-specific videos, we'll use the property's
     description,
-    property: propertyInfo, // Assuming .get() populates this like .list() does
+    property: propertyInfo, // This has the property-level details
   } = unit;
 
   const {
@@ -83,13 +88,14 @@ export default function UnitDetail() {
   return (
     <div className="py-6 container-page">
       <div className="flex justify-between items-center mb-3">
-        <button onClick={() => history.back()} className="text-sm underline">
+        {/* MODIFIED: Use navigate(-1) for a more reliable "Back" */}
+        <button onClick={() => navigate(-1)} className="text-sm underline">
           &larr; Back
         </button>
         {/* This is the link to the parent property */}
         {propertyInfo && (
           <Link
-            to={`/properties/${propertyInfo._id}`}
+            to={`/property/${propertyInfo._id}`}
             className="text-sm underline"
           >
             View Parent Property &rarr;
@@ -180,14 +186,15 @@ export default function UnitDetail() {
             </div>
           </div>
 
-          {/* Video Tour */}
-          {videoTours?.[0] && (
+          {/* === ADDED: Property Video Tour === */}
+          {/* This pulls from the parent property, as requested */}
+          {propertyInfo?.videoTours?.[0] && (
             <div className="mt-6">
-              <h3 className="mb-2 font-medium">Unit video tour</h3>
+              <h3 className="mb-2 font-medium">Property Video Tour</h3>
               <div className="w-full overflow-hidden bg-black rounded-lg aspect-video">
                 <iframe
                   title="tour"
-                  src={toEmbed(videoTours[0])}
+                  src={toEmbed(propertyInfo.videoTours[0])}
                   className="w-full h-full"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
@@ -196,10 +203,28 @@ export default function UnitDetail() {
             </div>
           )}
 
-          {/* Description */}
+          {/* === ADDED: Amenities === */}
+          {/* This also pulls from the parent property */}
+          {propertyInfo?.amenities?.length > 0 && (
+            <div className="mt-6">
+              <h3 className="mb-2 font-medium">Amenities</h3>
+              <div className="flex flex-wrap gap-2">
+                {propertyInfo.amenities.map((a, i) => (
+                  <div
+                    key={i}
+                    className="px-3 py-1 text-sm rounded-full bg-brand-light border border-brand-gray"
+                  >
+                    {a}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Unit Description */}
           {description && (
             <div className="mt-6">
-              <h3 className="mb-2 font-medium">Description</h3>
+              <h3 className="mb-2 font-medium">Unit Description</h3>
               <p className="text-sm text-neutral-700">{description}</p>
             </div>
           )}
@@ -207,11 +232,13 @@ export default function UnitDetail() {
 
         {/* Inquiry Form */}
         <aside className="p-4 card h-fit">
-          <div className="mb-2 font-medium">Property Inquiry</div>
+          <div className="mb-2 font-medium">Inquire About This Unit</div>
+          {/* MODIFIED: Pass unit info to the form */}
           <InquiryForm
             propertyId={propertyInfo?._id}
             propertyName={propertyInfo?.propertyName}
-            // You could enhance InquiryForm to accept and pre-fill the unit number
+            unitId={unit._id}
+            unitName={unit.unitNumber}
           />
           <div className="p-3 mt-6 text-sm border rounded bg-brand-light border-brand-gray">
             <div className="mb-1 font-medium">Contact Us</div>
@@ -268,3 +295,4 @@ export default function UnitDetail() {
     </div>
   );
 }
+
