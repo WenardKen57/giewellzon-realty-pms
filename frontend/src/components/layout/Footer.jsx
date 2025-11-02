@@ -1,9 +1,7 @@
-import { useLocation, useNavigate, Link } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 
 export default function Footer() {
   const loc = useLocation();
-  const navigate = useNavigate(); 
-
   // Hide footer on all admin pages
   if (loc.pathname.startsWith("/admin")) return null;
 
@@ -28,33 +26,30 @@ export default function Footer() {
           <div className="mb-2 font-semibold text-white">Quick Links</div>
           <ul className="space-y-1 text-sm text-brand-light">
             <li>
-              <Link to="/" className="hover:underline">
+              <a href="/" className="hover:underline">
                 Home
-              </Link>
+              </a>
             </li>
             <li>
-              <Link to="/properties" className="hover:underline">
+              <a href="/properties" className="hover:underline">
                 Properties
-              </Link>
+              </a>
             </li>
             <li>
-              <Link to="/about" className="hover:underline">
+              <a href="/about" className="hover:underline">
                 About
-              </Link>
+              </a>
             </li>
             <li>
-              <Link to="/contact" className="hover:underline">
+              <a href="/contact" className="hover:underline">
                 Contact
-              </Link>
+              </a>
             </li>
           </ul>
         </div>
         <div>
           <div className="mb-2 font-semibold text-white">Get in Touch</div>
-          <button
-            className="text-white border-white btn btn-outline hover:bg-white hover:text-brand-primary"
-            onClick={() => navigate("/contact")}
-          >
+          <button className="text-white border-white btn btn-outline hover:bg-white hover:text-brand-primary">
             Click Here
           </button>
           <div className="mt-3 text-xs opacity-75">

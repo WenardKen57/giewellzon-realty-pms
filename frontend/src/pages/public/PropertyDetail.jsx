@@ -1,11 +1,12 @@
 import { useEffect, useState, useMemo } from "react";
-import { useParams, useLocation, useNavigate, Link } from "react-router-dom";
+// *** ADD useLocation ***
+import { useParams, useLocation } from "react-router-dom";
 import { PropertiesAPI } from "../../api/properties";
 import InquiryForm from "../../components/layout/InquiryForm";
 
 export default function PropertyDetail() {
   const { id } = useParams();
-  const location = useLocation();
+  const location = useLocation(); // *** ADD this ***
   const [p, setP] = useState(null);
   const [lightbox, setLightbox] = useState({ open: false, index: 0 });
 
@@ -19,16 +20,20 @@ export default function PropertyDetail() {
     if (id) load();
   }, [id]);
 
-  // (useEffect for scrolling - no change)
+  // *** NEW: useEffect to scroll to hash ***
   useEffect(() => {
+    // Only scroll if there's a hash and property data (p) has loaded
     if (location.hash && p) {
       const id = location.hash.replace("#", "");
+      // Use a timeout to ensure the element has rendered
       const timer = setTimeout(() => {
         const element = document.getElementById(id);
         if (element) {
           element.scrollIntoView({ behavior: "smooth", block: "start" });
+
+          // Optional: add a temporary highlight
           element.style.transition = "all 0.3s ease-in-out";
-          element.style.backgroundColor = "rgba(255, 235, 59, 0.3)";
+          element.style.backgroundColor = "rgba(255, 235, 59, 0.3)"; // Yellow highlight
           const highlightTimer = setTimeout(() => {
             if (element) {
               element.style.backgroundColor = "transparent";
@@ -37,27 +42,28 @@ export default function PropertyDetail() {
 
           return () => clearTimeout(highlightTimer);
         }
-      }, 300);
+      }, 300); // 300ms delay to wait for render
 
       return () => clearTimeout(timer);
     }
-  }, [location.hash, p]);
+  }, [location.hash, p]); // Re-run if hash changes or property data loads
 
-  // Group available units
+  // 🧠 Group available units
   const groupedUnits = useMemo(() => {
     if (!p?.units) return [];
 
     const availableUnits = p.units.filter((u) => u.status === "available");
 
     const groups = availableUnits.reduce((acc, unit) => {
-      const { specifications, price, photos = [], unitNumber } = unit;
+      const { specifications, price, photos = [] } = unit;
       const {
         bedrooms = 0,
         bathrooms = 0,
         floorArea = 0,
       } = specifications || {};
 
-      const key = `name-${unitNumber}-beds-${bedrooms}-baths-${bathrooms}-sqm-${floorArea}`;
+      // This key MUST match the key generated in Properties.jsx
+      const key = `beds-${bedrooms}-baths-${bathrooms}-sqm-${floorArea}`;
 
       if (!acc[key]) {
         acc[key] = {
@@ -66,8 +72,6 @@ export default function PropertyDetail() {
           count: 0,
           minPrice: price,
           photos: [],
-          representativeUnitId: unit._id,
-          unitName: unitNumber || "Unit",
         };
       }
 
@@ -83,7 +87,6 @@ export default function PropertyDetail() {
 
   if (!p) return <div className="py-10 container-page">Loading...</div>;
 
-  // ... (rest of the component is identical to the last version) ...
   const addr =
     [p.street, p.city, p.province].filter(Boolean).join(", ") ||
     p.location ||
@@ -108,7 +111,9 @@ export default function PropertyDetail() {
 
       <div className="grid lg:grid-cols-[1fr_320px] gap-6">
         <div>
-          {/* ... (Main Image, Thumbnails, Property Info - no changes) ... */}
+          {/* ... (rest of the component is the same) ... */}
+
+          {/* 🏠 Main Image, 🖼️ Thumbnail Grid, Property Info, etc. ... */}
           <div
             className="relative cursor-pointer group"
             onClick={() => openLightbox(0)}
@@ -293,17 +298,7 @@ export default function PropertyDetail() {
 
 // 🏘️ UnitGroupCard with carousel support
 function UnitGroupCard({ group }) {
-  const navigate = useNavigate();
-  const {
-    specifications,
-    count,
-    minPrice,
-    photos = [],
-    key,
-    representativeUnitId,
-    unitName, // This will now correctly be the unitNumber
-  } = group;
-
+  const { specifications, count, minPrice, photos = [], key } = group; // *** Destructure key ***
   const [index, setIndex] = useState(0);
   const {
     bedrooms = 0,
@@ -313,35 +308,28 @@ function UnitGroupCard({ group }) {
     parking = 0,
   } = specifications || {};
 
-  let specTitle = "Unit Specifications";
+  let title = "Unit";
   if (bedrooms > 0) {
-    specTitle = `${bedrooms} Bedroom ${
+    title = `${bedrooms} Bedroom ${
       bathrooms > 0 ? `/ ${bathrooms} Bathroom` : ""
     }`;
   } else if (floorArea > 0) {
-    specTitle = `${floorArea} sqm Unit`;
+    title = `${floorArea} sqm Unit`;
   } else if (lotArea > 0) {
-    specTitle = `${lotArea} sqm Lot`;
+    title = `${lotArea} sqm Lot`;
   }
 
   const hasPhotos = photos && photos.length > 0;
 
   return (
-    <div
-      id={key}
-      className="p-4 card space-y-3 scroll-mt-20 cursor-pointer hover:shadow-lg transition-shadow duration-200"
-      onClick={() => navigate(`/unit/${representativeUnitId}`)}
-    >
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="text-lg font-semibold text-brand-primary">
-            {unitName} {/* This will now show "Unit A1" etc. */}
-          </div>
-          <div className="text-sm text-neutral-600 -mt-1">{specTitle}</div>
-        </div>
-        <span className="flex-shrink-0 badge badge-green">{count} Available</span>
+    // *** MODIFIED: Add id={key} to this div ***
+    <div id={key} className="p-4 card space-y-3 scroll-mt-20">
+      {" "}
+      {/* Added scroll-mt-20 for header offset */}
+      <div className="flex items-center justify-between">
+        <div className="text-lg font-semibold text-brand-primary">{title}</div>
+        <span className="badge badge-green">{count} Available</span>
       </div>
-
       <div className="font-semibold text-brand-primary">
         Starting from: ₱ {Number(minPrice || 0).toLocaleString()}
       </div>
@@ -356,19 +344,15 @@ function UnitGroupCard({ group }) {
           {photos.length > 1 && (
             <>
               <button
-                onClick={(e) => {
-                  e.stopPropagation(); // Prevent navigation when clicking buttons
-                  setIndex((index - 1 + photos.length) % photos.length);
-                }}
+                onClick={() =>
+                  setIndex((index - 1 + photos.length) % photos.length)
+                }
                 className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 text-white rounded-full px-2 py-1 text-lg"
               >
                 ‹
               </button>
               <button
-                onClick={(e) => {
-                  e.stopPropagation(); // Prevent navigation
-                  setIndex((index + 1) % photos.length);
-                }}
+                onClick={() => setIndex((index + 1) % photos.length)}
                 className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 text-white rounded-full px-2 py-1 text-lg"
               >
                 ›
