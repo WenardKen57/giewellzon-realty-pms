@@ -2,9 +2,30 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { UnitsAPI } from "../../api/units";
 import { toast } from "react-toastify";
-import InquiryForm from "../../components/layout/InquiryForm"; // Assuming this path
+import InquiryForm from "../../components/layout/InquiryForm";
+import {
+  Image,
+  Video,
+  ChevronLeft,
+  ChevronRight,
+  Building2,
+  X,
+  MapPin,
+  Ruler,
+  Square,
+  BedDouble,
+  Bath,
+  Car,
+} from "lucide-react";
 
-// Helper function from PropertyDetail.jsx
+/*
+  UI-only improvements:
+  - Elevated visual style to match PropertyDetail.
+  - Added icons for specifications.
+  - More polished layout with visual hierarchy.
+  - Kept all logic / API calls unchanged.
+*/
+
 function toEmbed(url) {
   try {
     const u = new URL(url);
@@ -27,17 +48,13 @@ export default function UnitDetail() {
   useEffect(() => {
     if (unitId) {
       setLoading(true);
-      UnitsAPI.get(unitId) // NOTE: Assuming UnitsAPI.get(id) exists
-        .then((data) => {
-          setUnit(data);
-        })
+      UnitsAPI.get(unitId)
+        .then((data) => setUnit(data))
         .catch((err) => {
           console.error("Failed to load unit:", err);
           toast.error("Failed to load unit details.");
         })
-        .finally(() => {
-          setLoading(false);
-        });
+        .finally(() => setLoading(false));
     }
   }, [unitId]);
 
@@ -48,11 +65,12 @@ export default function UnitDetail() {
     specifications = {},
     price = 0,
     photos = [],
-    thumbnail,
     videoTours = [],
     amenities = [],
     description,
-    property: propertyInfo, // Assuming .get() populates this like .list() does
+    property: propertyInfo,
+    status,
+    unitNumber,
   } = unit;
 
   const {
@@ -63,47 +81,65 @@ export default function UnitDetail() {
     parking = 0,
   } = specifications;
 
-  // Use unit-specific photos, fallback to property thumbnail
   const displayPhotos = photos.length
     ? photos
     : [propertyInfo?.thumbnail].filter(Boolean);
 
-  // Lightbox functions (from PropertyDetail.jsx)
   const openLightbox = (i) => setLightbox({ open: true, index: i });
   const closeLightbox = () => setLightbox({ open: false, index: 0 });
-  const prev = () =>
+  const prev = (e) => {
+    e?.stopPropagation();
     setLightbox((s) => ({
       ...s,
       index: (s.index - 1 + displayPhotos.length) % displayPhotos.length,
     }));
-  const next = () =>
+  };
+  const next = (e) => {
+    e?.stopPropagation();
     setLightbox((s) => ({
       ...s,
       index: (s.index + 1) % displayPhotos.length,
     }));
+  };
+
+  const statusClasses =
+    status === "available"
+      ? "bg-emerald-100 text-emerald-800"
+      : status === "sold"
+      ? "bg-rose-100 text-rose-800"
+      : "bg-amber-100 text-amber-800";
 
   return (
     <div className="py-6 container-page">
-      <div className="flex items-center justify-between mb-3">
-        <button onClick={() => history.back()} className="text-sm underline">
-          &larr; Back
-        </button>
-        {/* This is the link to the parent property */}
-        {propertyInfo && (
-          <Link
-            to={`/properties/${propertyInfo._id}`}
-            className="text-sm underline"
-          >
-            View Parent Property &rarr;
-          </Link>
-        )}
-      </div>
+     <div className="flex items-center justify-between mb-4">
+  <div className="flex items-center gap-3">
+    {/* Back button */}
+    <button
+      onClick={() => history.back()}
+      className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-emerald-700 transition-colors"
+    >
+      <ChevronLeft className="w-4 h-4" />
+      Back
+    </button>
 
-      <div className="grid lg:grid-cols-[1fr_320px] gap-6">
-        <div>
-          {/* Main Image */}
+    {/* View Parent Property link */}
+    {propertyInfo && (
+      <Link
+        to={`/properties/${propertyInfo._id}`}
+        className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-emerald-700 transition-colors"
+      >
+        <Building2 className="w-4 h-4" />
+        View Parent Property
+      </Link>
+    )}
+  </div>
+</div>
+
+      <div className="grid lg:grid-cols-[1fr_340px] gap-6">
+        <main>
+          {/* Hero Image */}
           <div
-            className="relative cursor-pointer group"
+            className="relative cursor-zoom-in group rounded-lg overflow-hidden shadow-sm"
             onClick={() => openLightbox(0)}
           >
             <img
@@ -111,81 +147,130 @@ export default function UnitDetail() {
                 displayPhotos?.[0] ||
                 "https://via.placeholder.com/1024x576?text=Unit"
               }
-              className="object-cover w-full h-64 rounded-lg"
-              alt={unit.unitNumber || "Unit"}
+              className="object-cover w-full h-72 md:h-96"
+              alt={unitNumber || "Unit"}
             />
-            <div className="absolute inset-0 flex items-center justify-center transition-opacity opacity-0 bg-black/30 group-hover:opacity-100">
-              <span className="text-sm text-white">Click to enlarge</span>
+            <div className="absolute left-4 top-4 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/60 text-white text-sm">
+              <Image className="w-4 h-4" />
+              <span>Photos</span>
+            </div>
+            <div className="absolute inset-0 flex items-end p-4 pointer-events-none">
+              <div className="pointer-events-auto bg-white/60 backdrop-blur-sm rounded-md px-3 py-1 text-xs text-slate-800">
+                Click to enlarge
+              </div>
             </div>
           </div>
 
-          {/* Thumbnail Grid */}
+          {/* Thumbnails */}
           {displayPhotos?.length > 1 && (
-            <div className="grid grid-cols-4 gap-2 mt-2">
-              {displayPhotos.slice(1, 5).map((ph, i) => (
-                <img
+            <div className="grid grid-cols-4 gap-2 mt-3">
+              {displayPhotos.slice(1, 9).map((ph, i) => (
+                <button
                   key={i}
-                  src={ph}
                   onClick={() => openLightbox(i + 1)}
-                  className="object-cover w-full h-24 transition-transform rounded cursor-pointer hover:scale-105"
-                  alt={`Unit thumbnail ${i + 1}`}
-                />
+                  className="block overflow-hidden rounded-md transform transition hover:scale-105 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                >
+                  <img
+                    src={ph}
+                    className="object-cover w-full h-24"
+                    alt={`Unit ${i + 1}`}
+                  />
+                </button>
               ))}
             </div>
           )}
 
-          {/* Unit Info */}
-          <div className="flex items-center justify-between mt-4">
-            <div>
-              <h1 className="text-xl font-semibold">
-                {unit.unitNumber || "Unit"}
+          {/* Title & Meta */}
+          <div className="flex items-start justify-between mt-5 gap-4">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-semibold leading-tight text-slate-900">
+                {unitNumber || "Unit"}
               </h1>
-              {/* Location is here, below the unit name/title */}
-              <div className="text-sm text-neutral-600">
-                {propertyInfo?.city}, {propertyInfo?.province}
+              <div className="mt-1 flex items-center gap-3 text-sm text-slate-600">
+                <div className="inline-flex items-center gap-1">
+                  <MapPin className="w-4 h-4 text-slate-400" />
+                  <span className="truncate">
+                    {propertyInfo?.city}, {propertyInfo?.province}
+                  </span>
+                </div>
+                <div className="text-slate-300">•</div>
+                <div className="text-sm text-slate-500">
+                  Status:{" "}
+                  <span
+                    className={`ml-2 inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${statusClasses}`}
+                  >
+                    {status}
+                  </span>
+                </div>
               </div>
             </div>
-            <div className="mt-1 text-lg font-bold text-brand-primary">
-              ₱ {Number(price).toLocaleString()}
+
+            <div className="flex flex-col items-end gap-2">
+              <div className="text-lg font-bold text-slate-900">
+                ₱ {Number(price).toLocaleString()}
+              </div>
+              {videoTours?.[0] && (
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-50 border border-amber-100 text-amber-700 text-sm">
+                  <Video className="w-4 h-4" />
+                  Video tour available
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Specifications */}
-          <div className="mt-6">
-            <h3 className="mb-2 font-medium">Specifications</h3>
-            <div className="grid gap-2 p-3 text-sm rounded bg-gray-50 md:grid-cols-3">
+          {/* Specifications — Improved */}
+          <section className="mt-8">
+            <h3 className="mb-5 text-xl font-semibold text-slate-800 flex items-center gap-2">
+              <Square className="w-6 h-6 text-emerald-600" />
+              Specifications
+            </h3>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {lotArea > 0 && (
-                <div>
-                  Lot Area: <strong>{lotArea} sqm</strong>
+                <div className="flex flex-col items-center justify-center p-4 bg-white rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-all">
+                  <Ruler className="w-7 h-7 text-emerald-600 mb-2" />
+                  <p className="text-sm text-slate-500">Lot Area</p>
+                  <p className="font-medium text-slate-900">{lotArea} sqm</p>
                 </div>
               )}
               {floorArea > 0 && (
-                <div>
-                  Floor Area: <strong>{floorArea} sqm</strong>
+                <div className="flex flex-col items-center justify-center p-4 bg-white rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-all">
+                  <Square className="w-7 h-7 text-emerald-600 mb-2" />
+                  <p className="text-sm text-slate-500">Floor Area</p>
+                  <p className="font-medium text-slate-900">{floorArea} sqm</p>
                 </div>
               )}
               {bedrooms > 0 && (
-                <div>
-                  Bedrooms: <strong>{bedrooms}</strong>
+                <div className="flex flex-col items-center justify-center p-4 bg-white rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-all">
+                  <BedDouble className="w-7 h-7 text-emerald-600 mb-2" />
+                  <p className="text-sm text-slate-500">Bedrooms</p>
+                  <p className="font-medium text-slate-900">{bedrooms}</p>
                 </div>
               )}
               {bathrooms > 0 && (
-                <div>
-                  Bathrooms: <strong>{bathrooms}</strong>
+                <div className="flex flex-col items-center justify-center p-4 bg-white rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-all">
+                  <Bath className="w-7 h-7 text-emerald-600 mb-2" />
+                  <p className="text-sm text-slate-500">Bathrooms</p>
+                  <p className="font-medium text-slate-900">{bathrooms}</p>
                 </div>
               )}
               {parking > 0 && (
-                <div>
-                  Parking: <strong>{parking}</strong>
+                <div className="flex flex-col items-center justify-center p-4 bg-white rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-all">
+                  <Car className="w-7 h-7 text-emerald-600 mb-2" />
+                  <p className="text-sm text-slate-500">Parking</p>
+                  <p className="font-medium text-slate-900">{parking}</p>
                 </div>
               )}
             </div>
-          </div>
+          </section>
 
           {/* Video Tour */}
           {videoTours?.[0] && (
-            <div className="mt-6">
-              <h3 className="mb-2 font-medium">Unit video tour</h3>
+            <section className="mt-6">
+              <h3 className="mb-3 text-lg font-medium text-slate-800 flex items-center gap-2">
+                <Video className="w-5 h-5 text-amber-600" />
+                Unit Video Tour
+              </h3>
               <div className="w-full overflow-hidden bg-black rounded-lg aspect-video">
                 <iframe
                   title="tour"
@@ -195,50 +280,58 @@ export default function UnitDetail() {
                   allowFullScreen
                 />
               </div>
-            </div>
+            </section>
           )}
 
           {/* Amenities */}
           {amenities?.length > 0 && (
-            <div className="mt-6">
-              <h3 className="mb-2 font-medium">Amenities</h3>
-              <div className="flex flex-wrap gap-2">
+            <section className="mt-6">
+              <h3 className="mb-3 text-lg font-medium text-slate-800">
+                Amenities
+              </h3>
+              <div className="flex flex-wrap gap-3">
                 {amenities.map((a, i) => (
-                  <span
+                  <div
                     key={i}
-                    className="px-2 py-1 text-xs rounded bg-brand-light"
+                    className="px-3 py-2 text-sm font-medium rounded-full shadow-sm bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-800 border border-emerald-100"
                   >
                     {a}
-                  </span>
+                  </div>
                 ))}
               </div>
-            </div>
+            </section>
           )}
 
           {/* Description */}
           {description && (
-            <div className="mt-6">
-              <h3 className="mb-2 font-medium">Description</h3>
-              <p className="text-sm text-neutral-700">{description}</p>
-            </div>
+            <section className="mt-6">
+              <h3 className="mb-2 text-lg font-medium text-slate-800">
+                Description
+              </h3>
+              <p className="text-sm text-slate-700 leading-relaxed">
+                {description}
+              </p>
+            </section>
           )}
-        </div>
+        </main>
 
-        {/* Inquiry Form */}
-        <aside className="p-4 card h-fit">
-          <div className="mb-2 font-medium">Property Inquiry</div>
+        {/* Aside / Inquiry */}
+        <aside className="p-4 bg-white rounded-lg shadow-sm h-fit">
+          <div className="mb-3 text-base font-medium">
+            Inquire about this Unit
+          </div>
           <InquiryForm
             propertyId={propertyInfo?._id}
             propertyName={propertyInfo?.propertyName}
-            // You could enhance InquiryForm to accept and pre-fill the unit number
           />
-          <div className="p-3 mt-6 text-sm border rounded bg-brand-light border-brand-gray">
-            <div className="mb-1 font-medium">Contact Us</div>
-            <div>
+
+          <div className="p-3 mt-6 text-sm rounded-md bg-slate-50 border border-slate-100">
+            <div className="mb-1 font-medium text-slate-800">Contact Us</div>
+            <div className="text-slate-600">
               Brgy. San Isidro, Cabanatuan City, Nueva Ecija, Philippines
             </div>
-            <div>+63 966 752 7631</div>
-            <div>info@giewellzon.com</div>
+            <div className="text-slate-600 mt-1">+63 966 752 7631</div>
+            <div className="text-slate-600 mt-1">info@giewellzon.com</div>
           </div>
         </aside>
       </div>
@@ -252,35 +345,41 @@ export default function UnitDetail() {
           <button
             onClick={(e) => {
               e.stopPropagation();
-              prev();
+              prev(e);
             }}
-            className="absolute text-3xl text-white left-4 hover:text-gray-300"
+            className="absolute left-4 rounded-full bg-black/40 p-2 text-white hover:bg-black/60"
+            aria-label="Previous"
           >
-            ‹
+            <ChevronLeft className="w-7 h-7" />
           </button>
+
           <img
             src={displayPhotos[lightbox.index]}
             className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-lg"
             onClick={(e) => e.stopPropagation()}
             alt="Lightbox"
           />
+
           <button
             onClick={(e) => {
               e.stopPropagation();
-              next();
+              next(e);
             }}
-            className="absolute text-3xl text-white right-4 hover:text-gray-300"
+            className="absolute right-4 rounded-full bg-black/40 p-2 text-white hover:bg-black/60"
+            aria-label="Next"
           >
-            ›
+            <ChevronRight className="w-7 h-7" />
           </button>
+
           <button
             onClick={(e) => {
               e.stopPropagation();
               closeLightbox();
             }}
-            className="absolute text-2xl text-white top-4 right-4 hover:text-gray-300"
+            className="absolute top-4 right-4 rounded-full bg-black/40 p-2 text-white hover:bg-black/60"
+            aria-label="Close"
           >
-            ✕
+            <X className="w-5 h-5" />
           </button>
         </div>
       )}

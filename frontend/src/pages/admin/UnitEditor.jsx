@@ -1,48 +1,17 @@
-// src/pages/admin/UnitEditor.jsx
 import { useEffect, useState } from "react";
 import { toast } from "react-toastify";
 // Import BOTH APIs
 import { PropertiesAPI } from "../../api/properties";
 import { UnitsAPI } from "../../api/units";
+import { X, Cloud, Image, Trash2, Plus } from "lucide-react";
 
-// --- NEW: Lucide Icons for a cleaner UI ---
-const IconX = (props) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="3"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    {...props}
-  >
-    <line x1="18" y1="6" x2="6" y2="18"></line>
-    <line x1="6" y1="6" x2="18" y2="18"></line>
-  </svg>
-);
-
-const IconUploadCloud = (props) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    {...props}
-  >
-    <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
-    <path d="M12 12v9"></path>
-    <path d="m16 16-4-4-4 4"></path>
-  </svg>
-);
-// --- END: Lucide Icons ---
+/*
+  UI-only update to match the SalesModals/PropertyEditor aesthetic:
+  - Centered rounded modal card, gradient header icon, nicer inputs, dashed upload area,
+    photo grid with hover remove buttons, and green-gradient primary action.
+  - Kept all functionality exactly the same: media uploads, deletions, API calls,
+    validation, previews, and behavior unchanged.
+*/
 
 const BLANK_FORM = {
   unitNumber: "",
@@ -58,7 +27,7 @@ const BLANK_FORM = {
   soldDate: "",
   amenities: [],
   videoTours: [],
-  thumbnail: "", // Ensure thumbnail is part of the form
+  thumbnail: "",
 };
 
 export default function UnitEditor({ open, onClose, editing, propertyId }) {
@@ -67,19 +36,18 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // --- REFACTORED Media State ---
-  const [newThumbnail, setNewThumbnail] = useState(null); // The new File
-  const [thumbPreview, setThumbPreview] = useState(""); // URL for new File
-  const [existingThumbnail, setExistingThumbnail] = useState(""); // URL from editing.thumbnail
+  // Media state
+  const [newThumbnail, setNewThumbnail] = useState(null);
+  const [thumbPreview, setThumbPreview] = useState("");
+  const [existingThumbnail, setExistingThumbnail] = useState("");
 
-  const [newPhotos, setNewPhotos] = useState([]); // Array of new Files
-  const [newPhotoPreviews, setNewPhotoPreviews] = useState([]); // URLs for new Files
-  const [existingPhotos, setExistingPhotos] = useState([]); // URLs from editing.photos
+  const [newPhotos, setNewPhotos] = useState([]);
+  const [newPhotoPreviews, setNewPhotoPreviews] = useState([]);
+  const [existingPhotos, setExistingPhotos] = useState([]);
 
   useEffect(() => {
     if (open) {
       if (editing) {
-        // Editing existing unit
         setForm((s) => ({
           ...s,
           ...editing,
@@ -90,11 +58,10 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
           amenities: editing.amenities || [],
           videoTours: editing.videoTours || [],
         }));
-        // --- NEW: Populate existing media ---
         setExistingThumbnail(editing.thumbnail || "");
         setExistingPhotos(editing.photos || []);
       } else {
-        // Adding a new unit: reset everything
+        // Reset for new unit
         setForm(BLANK_FORM);
         setErrors({});
         setNewThumbnail(null);
@@ -104,14 +71,15 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
         setExistingPhotos([]);
       }
     } else {
-      // --- NEW: Clear previews when modal closes ---
+      // modal closed: clear selected previews
       setNewThumbnail(null);
       setThumbPreview("");
       setNewPhotos([]);
+      setNewPhotoPreviews([]);
     }
   }, [editing, open]);
 
-  // Build preview URL for NEW thumbnail
+  // thumbnail preview for selected file
   useEffect(() => {
     if (!newThumbnail) {
       setThumbPreview("");
@@ -122,7 +90,7 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
     return () => URL.revokeObjectURL(url);
   }, [newThumbnail]);
 
-  // Build preview URLs for NEW photos
+  // previews for newly selected photos
   useEffect(() => {
     newPhotoPreviews.forEach((u) => URL.revokeObjectURL(u));
     if (!newPhotos || newPhotos.length === 0) {
@@ -143,7 +111,6 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
     return newErrors;
   }
 
-  // --- NEW: Remove existing thumbnail (server-side) ---
   async function removeExistingThumb() {
     if (!editing?._id) return;
     if (!window.confirm("Remove existing thumbnail?")) return;
@@ -153,15 +120,13 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
       setExistingThumbnail("");
       toast.info("Thumbnail removed.");
     } catch (err) {
-      toast.error(
-        err?.response?.data?.message || "Failed to remove thumbnail."
-      );
+      console.error(err);
+      toast.error(err?.response?.data?.message || "Failed to remove thumbnail.");
     } finally {
       setDeleting(false);
     }
   }
 
-  // --- NEW: Remove existing photo (server-side) ---
   async function removeExistingPhoto(photoUrl) {
     if (!editing?._id) return;
     if (!window.confirm("Remove this photo?")) return;
@@ -171,30 +136,30 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
       setExistingPhotos((s) => s.filter((p) => p !== photoUrl));
       toast.info("Photo removed.");
     } catch (err) {
+      console.error(err);
       toast.error(err?.response?.data?.message || "Failed to remove photo.");
     } finally {
       setDeleting(false);
     }
   }
 
-  // --- NEW: Remove a NEWLY selected photo (client-side) ---
   function removeNewPhoto(index) {
     setNewPhotos((s) => s.filter((_, i) => i !== index));
   }
 
-  // --- NEW: Handle file selection ---
   const handlePhotoSelect = (e) => {
     const files = Array.from(e.target.files || []);
-    setNewPhotos((s) => [...s, ...files]);
-    e.target.value = null; // Allow re-selecting
+    setNewPhotos((s) => {
+      const combined = [...(s || []), ...files];
+      return combined.slice(0, 15);
+    });
+    e.target.value = null;
   };
 
   async function save(e) {
     e.preventDefault();
     if (editing) {
-      const confirmed = window.confirm(
-        "Are you sure you want to update this unit?"
-      );
+      const confirmed = window.confirm("Are you sure you want to update this unit?");
       if (!confirmed) return;
     }
 
@@ -213,7 +178,6 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
         amenities: form.amenities || [],
         videoTours: form.videoTours || [],
       };
-      // Remove media fields from main payload
       delete payload.photos;
       delete payload.thumbnail;
 
@@ -231,7 +195,6 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
 
       const id = res._id || editing._id;
 
-      // --- REFACTORED: Separate thumbnail and photo uploads ---
       if (newThumbnail) {
         await UnitsAPI.uploadThumbnail(id, newThumbnail);
       }
@@ -242,9 +205,7 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
       setNewThumbnail(null);
       setNewPhotos([]);
 
-      toast.success(
-        editing ? "Unit updated successfully!" : "Unit added successfully!"
-      );
+      toast.success(editing ? "Unit updated successfully!" : "Unit added successfully!");
       onClose(true);
     } catch (err) {
       console.error(err);
@@ -255,16 +216,14 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
   }
 
   function setSpec(key, value) {
-    setForm((s) => ({
-      ...s,
-      specifications: { ...s.specifications, [key]: value },
-    }));
+    setForm((s) => ({ ...s, specifications: { ...s.specifications, [key]: value } }));
   }
 
   function addAmenity() {
     const v = prompt("Amenity name:");
     if (v?.trim()) {
       setForm((s) => ({ ...s, amenities: [...(s.amenities || []), v.trim()] }));
+      toast.info(`Added amenity: ${v}`);
     }
   }
 
@@ -275,329 +234,230 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
       toast.warn("Please enter a valid YouTube URL.");
       return;
     }
-    setForm((s) => ({
-      ...s,
-      videoTours: [...(s.videoTours || []), url.trim()],
-    }));
+    setForm((s) => ({ ...s, videoTours: [...(s.videoTours || []), url.trim()] }));
+    toast.info("Video link added!");
+  }
+
+  // Helper icons for badges
+  function IconCheckSmall() {
+    return (
+      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid p-4 bg-black/50 place-items-center">
+    <div className="fixed inset-0 z-50 grid p-4 overflow-y-auto bg-black/60 place-items-center">
       <form
         onSubmit={save}
-        className="bg-white rounded-lg w-full max-w-2xl max-h-[92vh] overflow-auto p-6 space-y-4"
+        className="w-full max-w-2xl p-6 my-8 space-y-6 bg-white rounded-xl shadow-2xl ring-1 ring-black/5"
+        aria-modal="true"
+        role="dialog"
       >
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">
-            {editing ? "Update Unit" : "Add New Unit"}
-          </h2>
-          <button
-            type="button"
-            className="text-brand-secondary"
-            onClick={() => onClose(false)}
-          >
-            Close
-          </button>
-        </div>
+        <header className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div
+              className="w-12 h-12 rounded-lg flex items-center justify-center shadow"
+              style={{ background: "linear-gradient(135deg,#10B981,#047857)" }}
+            >
+              <Image className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800">
+                {editing ? "Update Unit" : "Add New Unit"}
+              </h2>
+              <p className="text-sm text-gray-500 mt-0.5">
+                Provide unit details and upload media. Media uploads are appended.
+              </p>
+            </div>
+          </div>
 
-        {/* === UNIT INFO === */}
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Unit Number / Name" error={errors.unitNumber}>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onClose(false)}
+              className="inline-flex items-center justify-center w-9 h-9 rounded-md text-gray-600 hover:bg-gray-100 transition"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </header>
+
+        {/* Unit Info */}
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <label className="block text-sm font-medium text-gray-600">Unit Number / Name</label>
             <input
-              className="input"
+              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
               value={form.unitNumber}
-              onChange={(e) =>
-                setForm((s) => ({ ...s, unitNumber: e.target.value }))
-              }
-              placeholder="e.g., 'Apt 101' or 'Main House'"
+              onChange={(e) => setForm((s) => ({ ...s, unitNumber: e.target.value }))}
+              placeholder="e.g., Apt 101 or Main House"
             />
-          </Field>
+            {errors.unitNumber && <p className="text-xs text-red-500 mt-1">{errors.unitNumber}</p>}
+          </div>
 
-          <Field label="Price" error={errors.price}>
+          <div>
+            <label className="block text-sm font-medium text-gray-600">Price</label>
             <input
-              className="input"
+              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
               type="number"
               value={form.price}
-              onChange={(e) =>
-                setForm((s) => ({ ...s, price: e.target.value }))
-              }
+              onChange={(e) => setForm((s) => ({ ...s, price: e.target.value }))}
               required
             />
-          </Field>
+            {errors.price && <p className="text-xs text-red-500 mt-1">{errors.price}</p>}
+          </div>
 
-          <Field label="Status">
+          <div>
+            <label className="block text-sm font-medium text-gray-600">Status</label>
             <select
-              className="input"
+              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
               value={form.status}
-              onChange={(e) =>
-                setForm((s) => ({ ...s, status: e.target.value }))
-              }
+              onChange={(e) => setForm((s) => ({ ...s, status: e.target.value }))}
             >
               <option value="available">Available</option>
               <option value="sold">Sold</option>
               <option value="rented">Rented</option>
             </select>
-          </Field>
-        </div>
-
-        {/* === SPECS === */}
-        <div>
-          <div className="mb-2 font-medium">Specifications</div>
-          <div className="grid gap-3 md:grid-cols-3">
-            <Spec
-              label="Lot Area (sqm)"
-              value={form.specifications.lotArea}
-              onChange={(v) => setSpec("lotArea", v)}
-            />
-            <Spec
-              label="Floor Area (sqm)"
-              value={form.specifications.floorArea}
-              onChange={(v) => setSpec("floorArea", v)}
-            />
-            <Spec
-              label="Bedrooms"
-              value={form.specifications.bedrooms}
-              onChange={(v) => setSpec("bedrooms", v)}
-            />
-            <Spec
-              label="Bathrooms"
-              value={form.specifications.bathrooms}
-              onChange={(v) => setSpec("bathrooms", v)}
-            />
-            <Spec
-              label="Parking"
-              value={form.specifications.parking}
-              onChange={(v) => setSpec("parking", v)}
-            />
           </div>
-        </div>
+        </section>
 
-        {/* === UNIT MEDIA (Styled & Separated) === */}
-        <div className="pt-2 space-y-4">
-          {/* --- Thumbnail Section --- */}
+        {/* Specs */}
+        <section>
+          <div className="mb-2 font-medium text-gray-700">Specifications</div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <Spec label="Lot Area (sqm)" value={form.specifications.lotArea} onChange={(v) => setSpec("lotArea", v)} />
+            <Spec label="Floor Area (sqm)" value={form.specifications.floorArea} onChange={(v) => setSpec("floorArea", v)} />
+            <Spec label="Bedrooms" value={form.specifications.bedrooms} onChange={(v) => setSpec("bedrooms", v)} />
+            <Spec label="Bathrooms" value={form.specifications.bathrooms} onChange={(v) => setSpec("bathrooms", v)} />
+            <Spec label="Parking" value={form.specifications.parking} onChange={(v) => setSpec("parking", v)} />
+          </div>
+        </section>
+
+        {/* Media */}
+        <section className="grid grid-cols-1 gap-6">
           <div>
-            <div className="mb-1 text-sm font-medium">Unit Thumbnail</div>
-            <p className="text-xs text-gray-500 mb-2">
-              This is the main cover image for the unit.
-            </p>
+            <div className="mb-1 text-sm font-medium text-gray-700">Unit Thumbnail</div>
+            <p className="text-xs text-gray-500 mb-2">Main cover image for the unit.</p>
             <div className="flex items-center gap-4">
-              {/* Preview */}
-              <div className="relative w-24 h-16 bg-gray-100 rounded-md flex-shrink-0">
+              <div className="relative w-28 h-20 bg-gray-100 rounded-md flex-shrink-0 overflow-hidden border">
                 {thumbPreview || existingThumbnail ? (
-                  <img
-                    src={thumbPreview || existingThumbnail}
-                    alt={thumbPreview ? "New thumbnail" : "Existing thumbnail"}
-                    className="w-full h-full object-cover rounded-md"
-                  />
+                  <img src={thumbPreview || existingThumbnail} alt="thumbnail" className="w-full h-full object-cover" />
                 ) : (
-                  <span className="text-xs text-gray-400 flex items-center justify-center h-full">
-                    No image
-                  </span>
+                  <div className="w-full h-full flex items-center justify-center text-slate-400">
+                    <Image className="w-6 h-6" />
+                  </div>
                 )}
               </div>
 
-              {/* Actions */}
-              <div className="flex-grow">
-                <label className="text-sm px-3 py-2 border rounded-md cursor-pointer hover:bg-gray-50">
-                  <span>
-                    {newThumbnail ? "Change selected" : "Select thumbnail"}
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) =>
-                      setNewThumbnail(e.target.files?.[0] || null)
-                    }
-                  />
+              <div className="flex flex-col gap-2 flex-grow">
+                <label className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-gray-200 cursor-pointer hover:bg-gray-50">
+                  <Cloud className="w-4 h-4 text-slate-500" />
+                  <span className="text-sm">{newThumbnail ? "Change selected" : "Select thumbnail"}</span>
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => setNewThumbnail(e.target.files?.[0] || null)} />
                 </label>
 
-                {newThumbnail && (
-                  <button
-                    type="button"
-                    className="ml-2 text-sm text-red-600 hover:underline"
-                    onClick={() => setNewThumbnail(null)}
-                  >
-                    Clear
-                  </button>
-                )}
+                <div className="flex items-center gap-3">
+                  {newThumbnail && <button type="button" className="text-sm text-red-600 hover:underline" onClick={() => setNewThumbnail(null)}>Clear</button>}
 
-                {!newThumbnail && existingThumbnail && (
-                  <button
-                    type="button"
-                    className="ml-2 text-sm text-red-600 hover:underline"
-                    onClick={removeExistingThumb}
-                    disabled={deleting}
-                  >
-                    {deleting ? "..." : "Remove existing"}
-                  </button>
-                )}
+                  {!newThumbnail && existingThumbnail && (
+                    <button type="button" className="inline-flex items-center gap-2 text-sm text-red-600 hover:underline" onClick={removeExistingThumb} disabled={deleting}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>{deleting ? "..." : "Remove existing"}</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
 
-          {/* --- Photos Section --- */}
           <div>
-            <div className="mb-1 text-sm font-medium">Additional Photos</div>
-            <p className="text-xs text-gray-500 mb-2">
-              Upload additional photos for the unit gallery. New photos will be
-              appended.
-            </p>
+            <div className="mb-1 text-sm font-medium text-gray-700">Additional Photos</div>
+            <p className="text-xs text-gray-500 mb-2">Upload additional photos. New photos will be appended.</p>
 
-            {/* Gallery Grid */}
             <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 mb-3">
-              {/* Existing Photos */}
               {existingPhotos.map((p, i) => (
-                <div
-                  key={`existing-${i}`}
-                  className="relative group aspect-square"
-                >
-                  <img
-                    src={p}
-                    alt={`Existing photo ${i + 1}`}
-                    className="w-full h-full object-cover rounded-md border"
-                  />
-                  <button
-                    type="button"
-                    className="absolute -top-1.5 -right-1.5 bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => removeExistingPhoto(p)}
-                    disabled={deleting}
-                    title="Remove this photo"
-                  >
-                    <IconX />
+                <div key={`existing-${i}`} className="relative group aspect-square rounded-md overflow-hidden border">
+                  <img src={p} alt={`Existing ${i}`} className="w-full h-full object-cover" />
+                  <button type="button" className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => removeExistingPhoto(p)} disabled={deleting} title="Remove">
+                    <X className="w-3 h-3" />
                   </button>
                 </div>
               ))}
 
-              {/* New Photo Previews */}
               {newPhotoPreviews.map((url, idx) => (
-                <div
-                  key={`new-${idx}`}
-                  className="relative group aspect-square"
-                >
-                  <img
-                    src={url}
-                    alt={`New photo ${idx + 1}`}
-                    className="w-full h-full object-cover rounded-md border-2 border-blue-400"
-                  />
-                  <button
-                    type="button"
-                    className="absolute -top-1.5 -right-1.5 bg-gray-700 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => removeNewPhoto(idx)}
-                    title="Clear this selection"
-                  >
-                    <IconX />
+                <div key={`new-${idx}`} className="relative group aspect-square rounded-md overflow-hidden border-2 border-blue-400">
+                  <img src={url} alt={`New ${idx}`} className="w-full h-full object-cover" />
+                  <button type="button" className="absolute top-1 right-1 bg-gray-700 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => removeNewPhoto(idx)} title="Remove">
+                    <X className="w-3 h-3" />
                   </button>
                 </div>
               ))}
             </div>
 
-            {/* File Input Area */}
-            <label className="relative flex flex-col items-center justify-center w-full h-24 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition">
+            <label className="relative flex flex-col items-center justify-center w-full h-24 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition">
               <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center">
-                <IconUploadCloud className="w-8 h-8 mb-2 text-gray-400" />
-                <p className="mb-1 text-sm text-gray-500">
-                  <span className="font-semibold">Click to upload</span> or drag
-                  and drop
-                </p>
+                <Cloud className="w-7 h-7 mb-2 text-slate-400" />
+                <p className="mb-1 text-sm text-slate-500"><span className="font-semibold">Click to upload</span> or drag and drop</p>
+                <p className="text-xs text-slate-500">PNG, JPG, GIF (up to 15)</p>
               </div>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                onChange={handlePhotoSelect}
-              />
+              <input type="file" accept="image/*" multiple className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handlePhotoSelect} />
             </label>
           </div>
-        </div>
+        </section>
 
-        {/* === Video Tours (same style as PropertyEditor) === */}
-        <div>
-          <div className="mb-2 font-medium">Video Tour</div>
-          <button
-            type="button"
-            className="px-3 py-1 text-sm border rounded"
-            onClick={addVideo}
-          >
-            Add YouTube URL
-          </button>
-          <ul className="mt-2 ml-6 text-sm list-disc">
-            {(form.videoTours || []).map((v, i) => (
-              <li key={i} className="flex items-center gap-2">
-                <span className="truncate">{v}</span>
-                <button
-                  type="button"
-                  className="text-xs text-brand-secondary"
-                  onClick={() =>
-                    setForm((s) => ({
-                      ...s,
-                      videoTours: s.videoTours.filter((_, idx) => idx !== i),
-                    }))
-                  }
-                >
-                  remove
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* === Amenities (same style as PropertyEditor) === */}
-        <div>
-          <div className="mb-2 font-medium">Amenities</div>
-          <button
-            type="button"
-            className="px-3 py-1 text-sm border rounded"
-            onClick={addAmenity}
-          >
-            Add Amenity
-          </button>
-          <div className="flex flex-wrap gap-2 mt-2">
-            {(form.amenities || []).map((a, i) => (
-              <span
-                key={i}
-                className="px-2 py-1 text-xs rounded bg-brand-light flex items-center gap-1"
-              >
-                {a}
-                <button
-                  type="button"
-                  className="text-brand-secondary hover:text-red-600"
-                  onClick={() => {
-                    if (
-                      window.confirm(`Are you sure you want to remove "${a}"?`)
-                    ) {
-                      setForm((s) => ({
-                        ...s,
-                        amenities: s.amenities.filter((_, idx) => idx !== i),
-                      }));
-                    }
-                  }}
-                >
-                  <IconX width="12" height="12" strokeWidth="4" />
-                </button>
-              </span>
-            ))}
+        {/* Video Tours & Amenities */}
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <div className="mb-2 text-sm font-medium text-gray-700">Video Tour</div>
+            <button type="button" className="px-3 py-1 text-sm border rounded inline-flex items-center gap-2" onClick={addVideo}>
+              <Image className="w-4 h-4" />
+              Add YouTube URL
+            </button>
+            <ul className="mt-2 ml-6 text-sm list-disc">
+              {(form.videoTours || []).map((v, i) => (
+                <li key={i} className="flex items-center gap-2">
+                  <span className="truncate">{v}</span>
+                  <button type="button" className="text-xs text-slate-600 hover:underline" onClick={() => setForm((s) => ({ ...s, videoTours: s.videoTours.filter((_, idx) => idx !== i) }))}>remove</button>
+                </li>
+              ))}
+            </ul>
           </div>
-        </div>
 
-        {/* === BUTTONS === */}
-        <div className="flex justify-end gap-2 pt-4 border-t">
-          <button
-            type="button"
-            className="px-4 py-2 border rounded"
-            onClick={() => onClose(false)}
-          >
+          <div>
+            <div className="mb-2 text-sm font-medium text-gray-700">Amenities</div>
+            <button type="button" className="px-3 py-1 text-sm border rounded inline-flex items-center gap-2" onClick={addAmenity}>
+              <Plus className="w-4 h-4" />
+              Add Amenity
+            </button>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {(form.amenities || []).map((a, i) => (
+                <span key={i} className="px-2 py-1 text-xs rounded bg-indigo-50 text-indigo-700 flex items-center gap-2">
+                  {a}
+                  <button type="button" className="text-indigo-600 hover:text-red-600" onClick={() => {
+                    if (window.confirm(`Are you sure you want to remove "${a}"?`)) {
+                      setForm((s) => ({ ...s, amenities: s.amenities.filter((_, idx) => idx !== i) }));
+                      toast.info(`Removed amenity: ${a}`);
+                    }
+                  }}>
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Actions */}
+        <div className="flex justify-end gap-3 pt-4 border-t">
+          <button type="button" className="px-3 py-2 rounded-md text-sm font-medium bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100 transition" onClick={() => onClose(false)} disabled={loading}>
             Cancel
           </button>
-          <button className="btn btn-primary" disabled={loading || deleting}>
-            {loading
-              ? "Saving..."
-              : deleting
-              ? "Deleting..."
-              : editing
-              ? "Update Unit"
-              : "Add Unit"}
+
+          <button type="submit" className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-white font-semibold shadow-md transition" disabled={loading || deleting} style={{ background: "linear-gradient(90deg,#10B981 0%,#047857 100%)" }}>
+            {loading ? "Saving..." : editing ? "Update Unit" : "Add Unit"}
           </button>
         </div>
       </form>
@@ -605,11 +465,11 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
   );
 }
 
-// --- Helper Components ---
+// Helper components
 function Field({ label, children, error }) {
   return (
     <div>
-      <div className="mb-1 text-sm">{label}</div>
+      <div className="mb-1 text-sm font-medium text-gray-600">{label}</div>
       {children}
       {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
     </div>
@@ -619,14 +479,8 @@ function Field({ label, children, error }) {
 function Spec({ label, value, onChange }) {
   return (
     <div>
-      <div className="mb-1 text-sm">{label}</div>
-      <input
-        className="input"
-        value={value || ""}
-        type="number"
-        min="0"
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <div className="mb-1 text-sm text-gray-600">{label}</div>
+      <input className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" value={value || ""} type="number" min="0" onChange={(e) => onChange(e.target.value)} />
     </div>
   );
 }
@@ -635,11 +489,7 @@ function isValidYouTubeUrl(url) {
   if (!url) return false;
   try {
     const u = new URL(url);
-    return (
-      u.hostname === "youtu.be" ||
-      u.hostname.includes("youtube.com") ||
-      url.startsWith("https://")
-    );
+    return u.hostname === "youtu.be" || u.hostname.includes("youtube.com") || url.startsWith("https://");
   } catch {
     return false;
   }

@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { getProfile, updateProfile, changePassword } from "../../api/users";
 import { toast } from "react-toastify";
+import { User, Mail, Phone, Lock, Save, Loader2 } from "lucide-react";
 
+/**
+ * [ENHANCED] Rebuilt InputField to use standard 'input' class and support icons
+ */
 function InputField({
   label,
   id,
@@ -13,29 +17,33 @@ function InputField({
   required = false,
   placeholder = "",
   autoComplete = "off",
+  icon: Icon, // New icon prop
 }) {
   return (
-    <div className="space-y-1">
+    <div>
       <label
         htmlFor={id || name}
         className="block text-sm font-medium text-gray-700"
       >
         {label}
       </label>
-      <input
-        id={id || name}
-        name={name}
-        type={type}
-        className={`w-full px-3 py-2 border border-gray-300 rounded-md text-gray-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition ${
-          disabled ? "bg-gray-100 cursor-not-allowed" : ""
-        }`}
-        placeholder={placeholder || label}
-        value={value ?? ""}
-        onChange={onChange}
-        disabled={disabled}
-        required={required}
-        autoComplete={autoComplete}
-      />
+      <div className="relative mt-1">
+        {Icon && (
+          <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+        )}
+        <input
+          id={id || name}
+          name={name}
+          type={type}
+          className={`input w-full ${Icon ? "pl-10" : ""}`} // Use standard input class
+          placeholder={placeholder || label}
+          value={value ?? ""}
+          onChange={onChange}
+          disabled={disabled}
+          required={required}
+          autoComplete={autoComplete}
+        />
+      </div>
     </div>
   );
 }
@@ -98,7 +106,7 @@ export default function Profile() {
       toast.success("Profile updated successfully!");
     } catch (err) {
       console.error(err);
-      toast.error("Profile update failed.");
+      toast.error(err?.response?.data?.message || "Profile update failed.");
     } finally {
       setSavingProfile(false);
     }
@@ -133,7 +141,7 @@ export default function Profile() {
       });
     } catch (err) {
       console.error(err);
-      toast.error("Password change failed.");
+      toast.error(err?.response?.data?.message || "Password change failed.");
     } finally {
       setSavingPassword(false);
     }
@@ -154,99 +162,123 @@ export default function Profile() {
     );
 
   return (
-    <div className="max-w-2xl mx-auto p-8 space-y-10 bg-white rounded-xl shadow border border-gray-200">
-      <h1 className="text-3xl font-bold text-gray-800 border-b pb-3">
-        My Profile
-      </h1>
+    // [EDIT] New page layout
+    <div className="p-4 md:p-6 lg:p-8 space-y-6">
+      {/* [EDIT] New Page Header */}
+      <div>
+        <h1 className="text-2xl font-semibold text-gray-900">My Profile</h1>
+        <p className="text-sm text-gray-500">
+          Update your account details and password.
+        </p>
+      </div>
 
-      {/* --- Profile Form --- */}
-      <form onSubmit={saveProfile} className="space-y-6">
-        <h2 className="text-xl font-semibold text-gray-700 border-b pb-2">
-          Account Details
-        </h2>
+      {/* [EDIT] New 2-column grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* --- Profile Form Card --- */}
+        <div className="p-6 bg-white border rounded-lg shadow-sm">
+          <h2 className="text-xl font-semibold text-gray-800 border-b pb-3">
+            Account Details
+          </h2>
+          <form onSubmit={saveProfile} className="space-y-4 mt-4">
+            <InputField
+              label="Username"
+              name="username"
+              value={profileForm.username}
+              onChange={handleProfileChange}
+              required
+              icon={User}
+            />
+            <InputField
+              label="Email"
+              name="email"
+              value={profile.email}
+              disabled
+              icon={Mail}
+            />
+            <InputField
+              label="Full Name"
+              name="fullName"
+              value={profileForm.fullName}
+              onChange={handleProfileChange}
+              icon={User}
+            />
+            <InputField
+              label="Contact Number"
+              name="contactNumber"
+              value={profileForm.contactNumber}
+              onChange={handleProfileChange}
+              icon={Phone}
+            />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          <InputField
-            label="Username"
-            name="username"
-            value={profileForm.username}
-            onChange={handleProfileChange}
-            required
-          />
-          <InputField
-            label="Email"
-            name="email"
-            value={profile.email}
-            disabled
-          />
-          <InputField
-            label="Full Name"
-            name="fullName"
-            value={profileForm.fullName}
-            onChange={handleProfileChange}
-          />
-          <InputField
-            label="Contact Number"
-            name="contactNumber"
-            value={profileForm.contactNumber}
-            onChange={handleProfileChange}
-          />
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={savingProfile}
+                className="btn bg-gradient-to-br from-green-500 to-green-700 text-white hover:from-green-600 hover:to-green-800 w-full sm:w-auto"
+              >
+                {savingProfile ? (
+                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                ) : (
+                  <Save className="w-5 h-5 mr-2" />
+                )}
+                <span>{savingProfile ? "Saving..." : "Save Changes"}</span>
+              </button>
+            </div>
+          </form>
         </div>
 
-        <div className="pt-4">
-          <button
-            type="submit"
-            disabled={savingProfile}
-            className="px-5 py-2 bg-green-600 text-white font-medium rounded-md hover:bg-green-700 disabled:opacity-50"
-          >
-            {savingProfile ? "Saving..." : "Save Changes"}
-          </button>
-        </div>
-      </form>
+        {/* --- Password Form Card --- */}
+        <div className="p-6 bg-white border rounded-lg shadow-sm">
+          <h2 className="text-xl font-semibold text-gray-800 border-b pb-3">
+            Change Password
+          </h2>
+          <form onSubmit={savePassword} className="space-y-4 mt-4">
+            <InputField
+              label="Current Password"
+              name="currentPassword"
+              type="password"
+              value={passwordForm.currentPassword}
+              onChange={handlePasswordChange}
+              required
+              icon={Lock}
+            />
+            <InputField
+              label="New Password"
+              name="newPassword"
+              type="password"
+              value={passwordForm.newPassword}
+              onChange={handlePasswordChange}
+              required
+              icon={Lock}
+            />
+            <InputField
+              label="Confirm New Password"
+              name="confirmPassword"
+              type="password"
+              value={passwordForm.confirmPassword}
+              onChange={handlePasswordChange}
+              required
+              icon={Lock}
+            />
 
-      {/* --- Password Form --- */}
-      <form onSubmit={savePassword} className="space-y-6">
-        <h2 className="text-xl font-semibold text-gray-700 border-b pb-2">
-          Change Password
-        </h2>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          <InputField
-            label="Current Password"
-            name="currentPassword"
-            type="password"
-            value={passwordForm.currentPassword}
-            onChange={handlePasswordChange}
-            required
-          />
-          <InputField
-            label="New Password"
-            name="newPassword"
-            type="password"
-            value={passwordForm.newPassword}
-            onChange={handlePasswordChange}
-            required
-          />
-          <InputField
-            label="Confirm New Password"
-            name="confirmPassword"
-            type="password"
-            value={passwordForm.confirmPassword}
-            onChange={handlePasswordChange}
-            required
-          />
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={savingPassword}
+                className="btn bg-gradient-to-br from-red-500 to-red-700 text-white hover:from-red-600 hover:to-red-800 w-full sm:w-auto"
+              >
+                {savingPassword ? (
+                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                ) : (
+                  <Save className="w-5 h-5 mr-2" />
+                )}
+                <span>{savingPassword ? "Changing..." : "Change Password"}</span>
+              </button>
+            </div>
+          </form>
         </div>
-
-        <div className="pt-4">
-          <button
-            type="submit"
-            disabled={savingPassword}
-            className="px-5 py-2 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50"
-          >
-            {savingPassword ? "Changing..." : "Change Password"}
-          </button>
-        </div>
-      </form>
+      </div>
     </div>
   );
 }
+

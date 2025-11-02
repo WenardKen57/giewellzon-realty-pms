@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react"; // 1. Import useMemo
+import { useEffect, useState, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import { PropertiesAPI } from "../../api/properties";
@@ -6,6 +6,10 @@ import { UnitsAPI } from "../../api/units";
 
 import UnitEditor from "./UnitEditor";
 import PropertyEditor from "./PropertyEditor";
+
+// lucide icons used for consistent design
+import { ArrowLeft, Plus, Search, Filter, Edit3, Trash2 } from "lucide-react";
+
 
 export default function PropertyDetailPage() {
   const { id } = useParams();
@@ -17,7 +21,7 @@ export default function PropertyDetailPage() {
   const [editingUnit, setEditingUnit] = useState(null);
   const [isPropertyEditorOpen, setIsPropertyEditorOpen] = useState(false);
 
-  // 2. Add state for your unit filters
+  // Unit filters
   const [unitFilters, setUnitFilters] = useState({
     search: "",
     status: "", // "" means "all"
@@ -40,6 +44,7 @@ export default function PropertyDetailPage() {
     if (id) {
       loadProperty();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   // Modal close handlers
@@ -60,11 +65,7 @@ export default function PropertyDetailPage() {
 
   // Delete handler
   async function handleDeleteUnit(unit) {
-    if (
-      !window.confirm(
-        `Are you sure you want to delete unit "${unit.unitNumber}"?`
-      )
-    ) {
+    if (!window.confirm(`Are you sure you want to delete unit "${unit.unitNumber}"?`)) {
       return;
     }
     try {
@@ -73,24 +74,20 @@ export default function PropertyDetailPage() {
       loadProperty();
     } catch (err) {
       toast.error("Failed to delete unit.");
+      console.error(err);
     }
   }
 
-  // 3. Create a filtered list of units using useMemo
+  // Filtered units using useMemo (unchanged logic)
   const filteredUnits = useMemo(() => {
-    if (!property?.units) {
-      return [];
-    }
+    if (!property?.units) return [];
 
-    // Start with all units
     let units = property.units;
 
-    // Apply status filter
     if (unitFilters.status) {
       units = units.filter((unit) => unit.status === unitFilters.status);
     }
 
-    // Apply search filter
     if (unitFilters.search) {
       const searchTerm = unitFilters.search.toLowerCase();
       units = units.filter((unit) =>
@@ -99,75 +96,155 @@ export default function PropertyDetailPage() {
     }
 
     return units;
-  }, [property?.units, unitFilters]); // Re-filter when units or filters change
+  }, [property?.units, unitFilters]);
 
-  if (loading) return <div>Loading...</div>;
-  if (!property) return <div>Property not found.</div>;
+  // Helper to pick the thumbnail URL from common possible fields
+  function thumbnailForProperty(p) {
+    return p?.thumbnail || p?.image || p?.imageUrl || "";
+  }
+
+  if (loading) return <div className="p-6">Loading...</div>;
+  if (!property) return <div className="p-6">Property not found.</div>;
 
   return (
-    <div className="p-6">
-      <Link
-        to="/admin/properties"
-        className="text-sm text-brand-secondary hover:underline"
-      >
-        &larr; Back to Property List
+    <div className="p-6 space-y-6">
+      <Link to="/admin/properties" className="text-sm text-slate-600 hover:underline inline-flex items-center gap-2">
+        <ArrowLeft className="w-4 h-4" />
+        Back to Property List
       </Link>
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">{property.propertyName}</h1>
-        <button
-          className="btn btn-outline"
-          onClick={() => setIsPropertyEditorOpen(true)}
-        >
-          Edit Property Details
-        </button>
+
+      {/* Header */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          {thumbnailForProperty(property) ? (
+            <img
+              src={thumbnailForProperty(property)}
+              alt={property.propertyName || "Property thumbnail"}
+              className="w-16 h-16 rounded-md object-cover border border-slate-100 shadow-sm"
+              onError={(e) => {
+                e.currentTarget.style.display = "none";
+              }}
+            />
+          ) : (
+            <div className="w-16 h-16 rounded-md bg-gradient-to-br from-indigo-100 to-purple-50 flex items-center justify-center text-indigo-600 font-semibold text-sm border border-slate-100">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path d="M3 13.5V20a1 1 0 001 1h6.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" opacity="0.9"/>
+                <path d="M21 10.5V4a1 1 0 00-1-1h-6.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" opacity="0.9"/>
+                <path d="M3 13.5L12 6l9 7.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" opacity="0.9"/>
+              </svg>
+            </div>
+          )}
+
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-800">{property.propertyName}</h1>
+            <p className="text-sm text-slate-500 mt-1">
+              {property.city}, {property.province}
+            </p>
+            {/* other small meta */}
+            {property.propertyType && (
+              <div className="mt-2 inline-block text-xs px-2 py-1 rounded-md bg-indigo-50 text-indigo-600 border border-indigo-100">
+                {property.propertyType}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-white font-semibold shadow-md transition transform hover:-translate-y-0.5 focus:outline-none"
+            style={{
+              background: "linear-gradient(90deg,#10B981 0%,#047857 100%)",
+            }}
+            onClick={() => setIsPropertyEditorOpen(true)}
+          >
+            <Edit3 className="w-4 h-4" />
+            Edit Property Details
+          </button>
+        </div>
       </div>
-      <p>
-        {property.city}, {property.province}
-      </p>
-      {/* You would display other property details here... */}
 
       <hr className="my-6" />
 
-      {/* === UNITS MANAGEMENT === */}
+      {/* Units header */}
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Units</h2>
         <button
-          className="btn btn-primary"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-white font-semibold shadow-md transition transform hover:-translate-y-0.5 focus:outline-none"
+          style={{
+            background: "linear-gradient(90deg,#10B981 0%,#047857 100%)",
+          }}
           onClick={() => {
             setEditingUnit(null);
             setIsUnitEditorOpen(true);
           }}
         >
-          + Add New Unit
+          <Plus className="w-4 h-4" />
+          <span className="hidden sm:inline">Add New Unit</span>
         </button>
       </div>
 
-      {/* 4. Add the filter inputs */}
-      <div className="flex gap-2 mt-4">
-        <input
-          type="text"
-          placeholder="Search by unit number..."
-          className="w-full max-w-xs input"
-          value={unitFilters.search}
-          onChange={(e) =>
-            setUnitFilters((f) => ({ ...f, search: e.target.value }))
-          }
-        />
-        <select
-          className="input"
-          value={unitFilters.status}
-          onChange={(e) =>
-            setUnitFilters((f) => ({ ...f, status: e.target.value }))
-          }
-        >
-          <option value="">All Statuses</option>
-          <option value="available">Available</option>
-          <option value="sold">Sold</option>
-          <option value="rented">Rented</option>
-        </select>
+      {/* Filters: search + status dropdown + controls */}
+      <div className="p-3 bg-white border rounded-lg shadow-sm">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 flex items-center justify-center rounded-lg bg-gray-50 border border-gray-100">
+              <Search className="w-4 h-4 text-slate-400" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search by unit number..."
+              className="min-w-[160px] w-64 text-sm px-3 py-2 rounded-lg border border-gray-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              value={unitFilters.search}
+              onChange={(e) => setUnitFilters((f) => ({ ...f, search: e.target.value }))}
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 flex items-center justify-center rounded-lg bg-gray-50 border border-gray-100">
+              <Filter className="w-4 h-4 text-slate-400" />
+            </div>
+            <select
+              className="min-w-[140px] w-44 text-sm px-3 py-2 rounded-lg border border-gray-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              value={unitFilters.status}
+              onChange={(e) => setUnitFilters((f) => ({ ...f, status: e.target.value }))}
+            >
+              <option value="">All Statuses</option>
+              <option value="available">Available</option>
+              <option value="sold">Sold</option>
+              <option value="rented">Rented</option>
+            </select>
+          </div>
+
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setUnitFilters({ search: "", status: "" });
+              }}
+              className="px-3 py-2 rounded-md text-sm font-medium bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100 transition"
+            >
+              Clear
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                /* Apply here simply recomputes filteredUnits via updated state (no extra load needed) */
+                // keep a small visual loading state if desired; not necessary to call API
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-white font-semibold shadow hover:opacity-95 transition"
+              style={{
+                background: "linear-gradient(90deg,#10B981 0%,#047857 100%)",
+              }}
+            >
+              <Filter className="w-4 h-4" />
+              Apply
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* 5. List of existing units (now uses filteredUnits) */}
+      {/* Units table */}
       <div className="mt-4 overflow-auto">
         <table className="min-w-full w-full bg-white rounded-lg shadow">
           <thead className="text-left">
@@ -180,32 +257,24 @@ export default function PropertyDetailPage() {
             </tr>
           </thead>
           <tbody>
-            {/* 6. Check if filtered list is empty */}
             {filteredUnits.length === 0 ? (
               <tr>
-                <td
-                  colSpan="5"
-                  className="px-4 py-4 text-center text-neutral-500"
-                >
+                <td colSpan="5" className="px-4 py-4 text-center text-neutral-500">
                   No units found matching your filters.
                 </td>
               </tr>
             ) : (
-              // 7. Map over the filtered list
               filteredUnits.map((unit) => (
                 <tr key={unit._id} className="[&>td]:px-4 [&>td]:py-2 border-t">
                   <td>{unit.unitNumber || "N/A"}</td>
                   <td>₱ {Number(unit.price || 0).toLocaleString()}</td>
                   <td>
-                    {unit.specifications?.bedrooms || 0} bed,{" "}
-                    {unit.specifications?.bathrooms || 0} bath
+                    {unit.specifications?.bedrooms || 0} bed, {unit.specifications?.bathrooms || 0} bath
                   </td>
                   <td>
                     <span
                       className={`text-xs rounded-full px-2 py-0.5 ${
-                        unit.status === "available"
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-red-100 text-red-700"
+                        unit.status === "available" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
                       }`}
                     >
                       {unit.status}
@@ -214,19 +283,21 @@ export default function PropertyDetailPage() {
                   <td className="flex gap-2">
                     <button
                       title="Edit Unit"
-                      className="px-2 py-1 text-xs btn btn-outline"
+                      className="px-2 py-1 text-xs inline-flex items-center gap-2 rounded-md border border-indigo-200 bg-indigo-50 text-indigo-700"
                       onClick={() => {
                         setEditingUnit(unit);
                         setIsUnitEditorOpen(true);
                       }}
                     >
+                      <Edit3 className="w-3.5 h-3.5" />
                       Edit
                     </button>
                     <button
                       title="Delete Unit"
-                      className="px-2 py-1 text-xs btn btn-secondary"
+                      className="px-2 py-1 text-xs inline-flex items-center gap-2 rounded-md bg-rose-500 text-white"
                       onClick={() => handleDeleteUnit(unit)}
                     >
+                      <Trash2 className="w-3.5 h-3.5" />
                       Delete
                     </button>
                   </td>
@@ -237,7 +308,7 @@ export default function PropertyDetailPage() {
         </table>
       </div>
 
-      {/* The UnitEditor modal */}
+      {/* Modals */}
       <UnitEditor
         open={isUnitEditorOpen}
         onClose={handleUnitEditorClose}
@@ -245,7 +316,6 @@ export default function PropertyDetailPage() {
         propertyId={property._id}
       />
 
-      {/* The PropertyEditor modal */}
       <PropertyEditor
         open={isPropertyEditorOpen}
         onClose={handlePropertyEditorClose}
