@@ -25,7 +25,6 @@ const PropertySchema = new mongoose.Schema(
         "house",
         "condo", // e.g., "Condo Building"
         "apartment", // e.g., "Apartment Complex"
-        "lot",
         "townhouse",
         "villa",
         "compound",

@@ -17,7 +17,6 @@ export default function Properties() {
     "house",
     "condo",
     "apartment",
-    "lot",
     "townhouse",
     "villa",
     "compound",
@@ -167,7 +166,8 @@ export default function Properties() {
 // Property card for public listing
 function PropertyCard({ property }) {
   const cover =
-    property.thumbnail || property.photos?.[0] ||
+    property.thumbnail ||
+    property.photos?.[0] ||
     "https://via.placeholder.com/640x360?text=No+Image";
   const location = [property.city, property.province]
     .filter(Boolean)
