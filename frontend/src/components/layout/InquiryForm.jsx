@@ -1,5 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { InquiriesAPI } from "../../api/inquiries";
+
+// Helper function to format enum keys into labels
+function formatLabel(key) {
+  if (!key) return "";
+  return key.charAt(0).toUpperCase() + key.slice(1);
+}
 
 export default function InquiryForm({ propertyId }) {
   const [inq, setInq] = useState({
@@ -12,6 +18,31 @@ export default function InquiryForm({ propertyId }) {
   });
   const [status, setStatus] = useState("");
   const [agree, setAgree] = useState(false);
+  const [inquiryTypes, setInquiryTypes] = useState([]); // --- NEW STATE ---
+
+  // --- NEW EFFECT: Load inquiry types from backend ---
+  useEffect(() => {
+    InquiriesAPI.getTypes()
+      .then((types) => {
+        setInquiryTypes(types || []);
+        // Set default inquiryType if "general" exists, otherwise set to first item
+        if (types && types.length > 0) {
+          const defaultType = types.includes("general") ? "general" : types[0];
+          setInq((s) => ({ ...s, inquiryType: defaultType }));
+        }
+      })
+      .catch(() => {
+        // Fallback in case API fails
+        setInquiryTypes([
+          "general",
+          "pricing",
+          "viewing",
+          "financing",
+          "others",
+        ]);
+      });
+  }, []);
+  // --- END NEW EFFECT ---
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -163,11 +194,13 @@ export default function InquiryForm({ propertyId }) {
             setInq((s) => ({ ...s, inquiryType: e.target.value }))
           }
         >
-          <option value="general">General</option>
-          <option value="pricing">Pricing</option>
-          <option value="viewing">Scheduling of viewing</option>
-          <option value="financing">Financing</option>
-          <option value="others">Others</option>
+          {/* --- UPDATED: Dynamic options --- */}
+          {inquiryTypes.map((type) => (
+            <option key={type} value={type}>
+              {formatLabel(type)}
+            </option>
+          ))}
+          {/* --- END UPDATE --- */}
         </select>
       </div>
 

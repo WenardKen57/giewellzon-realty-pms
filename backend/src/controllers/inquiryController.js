@@ -3,6 +3,18 @@ const Property = require("../models/Property");
 const { safeSend } = require("../configs/mailer");
 const { isValidPHMobile } = require("../utils/validate");
 
+// --- NEW FUNCTION ---
+// Get the enum values for inquiryType
+async function getInquiryTypes(req, res, next) {
+  try {
+    const types = Inquiry.schema.path("inquiryType").enumValues;
+    res.json(types || []);
+  } catch (e) {
+    next(e);
+  }
+}
+// --- END NEW FUNCTION ---
+
 async function submitInquiry(req, res, next) {
   try {
     const b = req.body || {};
@@ -153,4 +165,5 @@ module.exports = {
   getInquiry,
   markHandled,
   updateStatus,
+  getInquiryTypes, // --- EXPORT NEW FUNCTION ---
 };

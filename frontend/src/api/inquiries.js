@@ -13,6 +13,7 @@ export const InquiriesAPI = {
     api
       .patch(endpoints.inquiries.updateStatus(id), { status })
       .then((r) => r.data),
+  getTypes: () => api.get(endpoints.inquiries.types).then((r) => r.data), // --- NEW FUNCTION ---
 };
 
 // Back-compat for older imports

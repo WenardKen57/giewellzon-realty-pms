@@ -66,6 +66,13 @@ function timeSince(date) {
   return "just now";
 }
 
+// Helper function to format enum keys into labels
+function formatLabel(key) {
+  if (!key) return "";
+  const spaced = key.replace("_", " ");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
 // #endregion
 
 // #region Pagination Hook + Component
@@ -216,12 +223,13 @@ export default function InquiriesAdmin() {
     "July", "August", "September", "October", "November", "December",
   ];
   const years = Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i);
-  const inquiryTypes = [
+  
+  // --- UPDATED: inquiryTypes is now state ---
+  const [inquiryTypes, setInquiryTypes] = useState([
     { key: "all", label: "All Types" },
-    { key: "general", label: "General" },
-    { key: "property", label: "Property" },
-    { key: "unit", label: "Unit" }
-  ];
+  ]);
+  // --- END UPDATE ---
+
   const statuses = [
     "all", "pending", "viewed", "contacted", "interested", "not_interested", "closed", "archived",
   ];
@@ -230,9 +238,23 @@ export default function InquiriesAdmin() {
   async function load() {
     try {
       setLoading(true);
-      const res = await InquiriesAPI.list({}); // Fetch ALL
+      // --- UPDATED: Fetch types along with inquiries ---
+      const [res, typesRes] = await Promise.all([
+        InquiriesAPI.list({}), // Fetch ALL inquiries
+        InquiriesAPI.getTypes(), // Fetch inquiry types
+      ]);
+      
       let data = res?.data ?? res ?? [];
       setAllInquiries(data);
+
+      // Process and set fetched types
+      const formattedTypes = (typesRes || []).map(type => ({
+        key: type,
+        label: formatLabel(type),
+      }));
+      setInquiryTypes([{ key: "all", label: "All Types" }, ...formattedTypes]);
+      // --- END UPDATE ---
+
     } catch (err) {
       console.error("Failed to load inquiries:", err);
       toast.error("Failed to load inquiries.");
@@ -608,7 +630,7 @@ function InquiryRow({ r, onStatusChange }) {
             {r.status.replace("_", " ")}
           </span>
           <span className="text-xs bg-gray-50 px-2.5 py-0.5 inline-block rounded text-gray-600 border">
-            {r.inquiryType || "Others"}
+            {formatLabel(r.inquiryType) || "Others"}
           </span>
           <select
             className="input text-sm h-9"

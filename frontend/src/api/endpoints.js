@@ -56,7 +56,7 @@ export const endpoints = {
     byId: (id) => `${API_BASE}/inquiries/${id}`,
     // handle: (id) => `${API_BASE}/inquiries/${id}/handle`, // Deprecated/Optional
     updateStatus: (id) => `${API_BASE}/inquiries/${id}/status`,
-    // scheduleViewing: (id) => `${API_BASE}/inquiries/${id}/schedule`, // Removed as per user request
+    types: `${API_BASE}/inquiries/config/types`, // --- NEW ENDPOINT ---
   },
 
   analytics: {
