@@ -200,10 +200,12 @@ export default function AdminLayout() {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   async function onLogout() {
-    // This will call your actual logout function from useAuth
-    await logout(); 
-    nav("/admin/login");
-    console.log("Redirecting to /admin/login");
+    // [EDIT] Add confirmation alert
+    if (window.confirm("Are you sure you want to log out?")) {
+      await logout(); 
+      nav("/admin/login");
+      console.log("Redirecting to /admin/login");
+    }
   }
 
   return (
@@ -248,8 +250,9 @@ export default function AdminLayout() {
             <span className="hidden sm:block text-sm text-neutral-700">
               {user?.fullName || user?.username || user?.email}
             </span>
+            {/* [EDIT] Replaced initial with User icon */}
             <div className="w-8 h-8 bg-brand-light rounded-full flex items-center justify-center text-brand-primary font-semibold">
-              {user?.fullName?.[0] || user?.username?.[0] || "U"}
+              <User className="w-5 h-5" />
             </div>
           </div>
         </header>
