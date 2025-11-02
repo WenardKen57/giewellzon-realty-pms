@@ -31,7 +31,7 @@ import {
   formatCurrency,
   Bar,
   Doughnut,
-} from "./analytics";
+} from "./Analytics.jsx";
 
 // #region Helper Components
 
@@ -60,9 +60,7 @@ function KpiCard({
 
   if (variant === "gradient") {
     return (
-      <div
-        className={`p-5 rounded-lg shadow-sm text-white ${gradient}`}
-      >
+      <div className={`p-5 rounded-lg shadow-sm text-white ${gradient}`}>
         <p className="text-sm font-medium text-green-50 truncate">{title}</p>
         <p className="text-2xl md:text-3xl font-bold tracking-tight">
           {format(value)}
@@ -166,7 +164,9 @@ function SalesReport() {
     setVizError(null);
 
     const filters = {
-      ...(dateMode === "range" ? { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined } : { year }),
+      ...(dateMode === "range"
+        ? { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }
+        : { year }),
       period,
       status,
       dateField,
@@ -207,8 +207,12 @@ function SalesReport() {
   // [NEW] Calculate KPIs from filtered lists, not the 'dash' object
   const kpiData = useMemo(() => {
     // If filters are at default, use the global 'dash' object
-    const isFiltered = dateMode !== 'year' || period !== 'monthly' || status !== 'closed' || dateField !== 'closingDate';
-    
+    const isFiltered =
+      dateMode !== "year" ||
+      period !== "monthly" ||
+      status !== "closed" ||
+      dateField !== "closingDate";
+
     // Fallback to global dash if not filtered or lists are empty
     if (!isFiltered && !vizLoading) {
       return {
@@ -224,8 +228,8 @@ function SalesReport() {
     let totalRevenue = 0;
     let totalSales = 0;
     let totalCommission = 0;
-    
-    properties.forEach(p => {
+
+    properties.forEach((p) => {
       totalRevenue += p.totalClosedRevenue || 0;
       totalSales += p.totalClosedSales || 0;
       totalCommission += p.totalCommissionPaid || 0; // Assuming this comes from property perf
@@ -236,7 +240,10 @@ function SalesReport() {
     // calculated from the list.
     // If 'totalCommissionPaid' is not on 'properties', we can sum 'agents'
     if (totalCommission === 0 && agents.length > 0) {
-       totalCommission = agents.reduce((acc, agent) => acc + (agent.totalCommission || 0), 0);
+      totalCommission = agents.reduce(
+        (acc, agent) => acc + (agent.totalCommission || 0),
+        0
+      );
     }
 
     return {
@@ -246,82 +253,215 @@ function SalesReport() {
       avgClosedSalePrice: totalSales > 0 ? totalRevenue / totalSales : 0,
       totalCommissionPaid: totalCommission,
     };
-  }, [dash, properties, agents, dateMode, period, status, dateField, vizLoading]);
-
+  }, [
+    dash,
+    properties,
+    agents,
+    dateMode,
+    period,
+    status,
+    dateField,
+    vizLoading,
+  ]);
 
   const shapedTrend = useMemo(() => {
     if (!trends || trends.length === 0) {
-      if (period === "quarterly") return [1, 2, 3, 4].map((q) => ({ label: `Q${q}`, sales: 0, revenue: 0 }));
-      return Array.from({ length: 12 }).map((_, i) => ({ label: `M${i + 1}`, sales: 0, revenue: 0 }));
+      if (period === "quarterly")
+        return [1, 2, 3, 4].map((q) => ({
+          label: `Q${q}`,
+          sales: 0,
+          revenue: 0,
+        }));
+      return Array.from({ length: 12 }).map((_, i) => ({
+        label: `M${i + 1}`,
+        sales: 0,
+        revenue: 0,
+      }));
     }
     if (period === "quarterly") {
-      const qMap = new Map([1, 2, 3, 4].map((q) => [q, { label: `Q${q}`, sales: 0, revenue: 0 }]));
+      const qMap = new Map(
+        [1, 2, 3, 4].map((q) => [q, { label: `Q${q}`, sales: 0, revenue: 0 }])
+      );
       trends.forEach((t) => {
-        if (t.quarter) qMap.set(t.quarter, { label: `Q${t.quarter}`, sales: t.count || 0, revenue: t.totalRevenue || 0 });
+        if (t.quarter)
+          qMap.set(t.quarter, {
+            label: `Q${t.quarter}`,
+            sales: t.count || 0,
+            revenue: t.totalRevenue || 0,
+          });
       });
       return Array.from(qMap.values());
     }
-    const mMap = new Map(Array.from({ length: 12 }).map((_, i) => [i + 1, { label: `M${i + 1}`, sales: 0, revenue: 0 }]));
+    const mMap = new Map(
+      Array.from({ length: 12 }).map((_, i) => [
+        i + 1,
+        { label: `M${i + 1}`, sales: 0, revenue: 0 },
+      ])
+    );
     trends.forEach((m) => {
-      if (m.month) mMap.set(m.month, { label: `M${m.month}`, sales: m.count || 0, revenue: m.totalRevenue || 0 });
+      if (m.month)
+        mMap.set(m.month, {
+          label: `M${m.month}`,
+          sales: m.count || 0,
+          revenue: m.totalRevenue || 0,
+        });
     });
     return Array.from(mMap.values());
   }, [trends, period]);
 
-  const trendDatasets = useMemo(() => ({
-    labels: shapedTrend.map((d) => d.label),
-    datasets: [
-      { type: "bar", label: "Sales Count", data: shapedTrend.map((d) => d.sales), backgroundColor: "#4F46E5", yAxisID: "ySales" },
-      { type: "line", label: "Revenue", data: shapedTrend.map((d) => d.revenue), borderColor: "#10B981", backgroundColor: "#10B981", yAxisID: "yRevenue", tension: 0.1 },
-    ],
-  }), [shapedTrend]);
+  const trendDatasets = useMemo(
+    () => ({
+      labels: shapedTrend.map((d) => d.label),
+      datasets: [
+        {
+          type: "bar",
+          label: "Sales Count",
+          data: shapedTrend.map((d) => d.sales),
+          backgroundColor: "#4F46E5",
+          yAxisID: "ySales",
+        },
+        {
+          type: "line",
+          label: "Revenue",
+          data: shapedTrend.map((d) => d.revenue),
+          borderColor: "#10B981",
+          backgroundColor: "#10B981",
+          yAxisID: "yRevenue",
+          tension: 0.1,
+        },
+      ],
+    }),
+    [shapedTrend]
+  );
 
   const trendOptions = {
-    responsive: true, maintainAspectRatio: false,
+    responsive: true,
+    maintainAspectRatio: false,
     scales: {
-      ySales: { type: "linear", position: "left", beginAtZero: true, title: { display: true, text: "Sales Count" } },
-      yRevenue: { type: "linear", position: "right", beginAtZero: true, title: { display: true, text: "Revenue (₱)" }, grid: { drawOnChartArea: false }, ticks: { callback: (v) => `₱${(v / 1_000_000).toFixed(1)}M` } },
-      x: { title: { display: true, text: period === "quarterly" ? "Quarter" : "Month" } },
+      ySales: {
+        type: "linear",
+        position: "left",
+        beginAtZero: true,
+        title: { display: true, text: "Sales Count" },
+      },
+      yRevenue: {
+        type: "linear",
+        position: "right",
+        beginAtZero: true,
+        title: { display: true, text: "Revenue (₱)" },
+        grid: { drawOnChartArea: false },
+        ticks: { callback: (v) => `₱${(v / 1_000_000).toFixed(1)}M` },
+      },
+      x: {
+        title: {
+          display: true,
+          text: period === "quarterly" ? "Quarter" : "Month",
+        },
+      },
     },
     plugins: { legend: { position: "bottom" } },
   };
 
-  const topProperties = useMemo(() => (properties || []).slice(0, 5), [properties]);
+  const topProperties = useMemo(
+    () => (properties || []).slice(0, 5),
+    [properties]
+  );
   const topAgents = useMemo(() => (agents || []).slice(0, 5), [agents]);
 
-  const topPropData = useMemo(() => ({
-    labels: topProperties.map((p) => p.propertyName),
-    datasets: [{ label: "Revenue", data: topProperties.map((p) => p.totalClosedRevenue || 0), backgroundColor: "#0ea5e9" }],
-  }), [topProperties]);
+  const topPropData = useMemo(
+    () => ({
+      labels: topProperties.map((p) => p.propertyName),
+      datasets: [
+        {
+          label: "Revenue",
+          data: topProperties.map((p) => p.totalClosedRevenue || 0),
+          backgroundColor: "#0ea5e9",
+        },
+      ],
+    }),
+    [topProperties]
+  );
 
-  const topAgentData = useMemo(() => ({
-    labels: topAgents.map((a) => a.agentName),
-    datasets: [{ label: "Revenue", data: topAgents.map((a) => a.totalRevenue || 0), backgroundColor: "#8b5cf6" }],
-  }), [topAgents]);
+  const topAgentData = useMemo(
+    () => ({
+      labels: topAgents.map((a) => a.agentName),
+      datasets: [
+        {
+          label: "Revenue",
+          data: topAgents.map((a) => a.totalRevenue || 0),
+          backgroundColor: "#8b5cf6",
+        },
+      ],
+    }),
+    [topAgents]
+  );
 
   const kpis = [
     // [EDIT] KPIs now use the new 'kpiData' object
-    { title: "Total Revenue", value: kpiData.totalClosedRevenue, format: formatCurrency, color: "green", variant: "gradient" },
-    { title: "Sold Units", value: kpiData.soldUnits, color: "indigo", variant: "gradient" },
-    { title: "Closed Sales", value: kpiData.totalClosedSales, color: "blue", variant: "gradient" },
-    { title: "Average Sale Price", value: kpiData.avgClosedSalePrice, format: formatCurrency, color: "purple", variant: "gradient" },
-    { title: "Total Commission Paid", value: kpiData.totalCommissionPaid, format: formatCurrency, color: "amber", variant: "gradient" },
+    {
+      title: "Total Revenue",
+      value: kpiData.totalClosedRevenue,
+      format: formatCurrency,
+      color: "green",
+      variant: "gradient",
+    },
+    {
+      title: "Sold Units",
+      value: kpiData.soldUnits,
+      color: "indigo",
+      variant: "gradient",
+    },
+    {
+      title: "Closed Sales",
+      value: kpiData.totalClosedSales,
+      color: "blue",
+      variant: "gradient",
+    },
+    {
+      title: "Average Sale Price",
+      value: kpiData.avgClosedSalePrice,
+      format: formatCurrency,
+      color: "purple",
+      variant: "gradient",
+    },
+    {
+      title: "Total Commission Paid",
+      value: kpiData.totalCommissionPaid,
+      format: formatCurrency,
+      color: "amber",
+      variant: "gradient",
+    },
   ];
 
   const topPropOptions = {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => formatCurrency(ctx.raw) } } },
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: (ctx) => formatCurrency(ctx.raw) } },
+    },
     scales: {
       x: { ticks: { autoSkip: false, maxRotation: 45, minRotation: 0 } },
-      y: { beginAtZero: true, ticks: { callback: (v) => `₱${(v / 1_000_000).toFixed(1)}M` } },
+      y: {
+        beginAtZero: true,
+        ticks: { callback: (v) => `₱${(v / 1_000_000).toFixed(1)}M` },
+      },
     },
   };
 
   const topAgentOptions = {
-    indexAxis: "y", responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => formatCurrency(ctx.raw) } } },
+    indexAxis: "y",
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: (ctx) => formatCurrency(ctx.raw) } },
+    },
     scales: {
-      x: { beginAtZero: true, ticks: { callback: (v) => `₱${(v / 1_000_000).toFixed(1)}M` } },
+      x: {
+        beginAtZero: true,
+        ticks: { callback: (v) => `₱${(v / 1_000_000).toFixed(1)}M` },
+      },
       y: { ticks: { autoSkip: false } },
     },
   };
@@ -339,37 +479,68 @@ function SalesReport() {
 
           <label>
             <span className="text-sm font-medium">Date Mode:</span>
-            <select className="input w-full mt-1" value={dateMode} onChange={(e) => setDateMode(e.target.value)} disabled={vizLoading}>
+            <select
+              className="input w-full mt-1"
+              value={dateMode}
+              onChange={(e) => setDateMode(e.target.value)}
+              disabled={vizLoading}
+            >
               <option value="year">By Year</option>
               <option value="range">By Range</option>
             </select>
           </label>
 
-          {dateMode === 'year' ? (
-             <label>
-                <span className="text-sm font-medium">Year:</span>
-                <select className="input w-full mt-1" value={year} onChange={(e) => setYear(Number(e.target.value))} disabled={vizLoading}>
-                  {Array.from({ length: 5 }, (_, i) => currentYear - i).map((y) => (
-                    <option key={y} value={y}>{y}</option>
-                  ))}
-                </select>
-              </label>
+          {dateMode === "year" ? (
+            <label>
+              <span className="text-sm font-medium">Year:</span>
+              <select
+                className="input w-full mt-1"
+                value={year}
+                onChange={(e) => setYear(Number(e.target.value))}
+                disabled={vizLoading}
+              >
+                {Array.from({ length: 5 }, (_, i) => currentYear - i).map(
+                  (y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  )
+                )}
+              </select>
+            </label>
           ) : (
             <>
               <label>
                 <span className="text-sm font-medium">From:</span>
-                <input type="date" className="input w-full mt-1" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} disabled={vizLoading} />
+                <input
+                  type="date"
+                  className="input w-full mt-1"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  disabled={vizLoading}
+                />
               </label>
               <label>
                 <span className="text-sm font-medium">To:</span>
-                <input type="date" className="input w-full mt-1" value={dateTo} onChange={(e) => setDateTo(e.target.value)} disabled={vizLoading} />
+                <input
+                  type="date"
+                  className="input w-full mt-1"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  disabled={vizLoading}
+                />
               </label>
             </>
           )}
 
           <label>
             <span className="text-sm font-medium">Period:</span>
-            <select className="input w-full mt-1" value={period} onChange={(e) => setPeriod(e.target.value)} disabled={vizLoading || dateMode === 'range'}>
+            <select
+              className="input w-full mt-1"
+              value={period}
+              onChange={(e) => setPeriod(e.target.value)}
+              disabled={vizLoading || dateMode === "range"}
+            >
               <option value="monthly">Monthly</option>
               <option value="quarterly">Quarterly</option>
             </select>
@@ -377,7 +548,12 @@ function SalesReport() {
 
           <label>
             <span className="text-sm font-medium">Status:</span>
-            <select className="input w-full mt-1" value={status} onChange={(e) => setStatus(e.target.value)} disabled={vizLoading}>
+            <select
+              className="input w-full mt-1"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              disabled={vizLoading}
+            >
               <option value="closed">Closed</option>
               <option value="pending">Pending</option>
             </select>
@@ -385,7 +561,12 @@ function SalesReport() {
 
           <label>
             <span className="text-sm font-medium">Date Field:</span>
-            <select className="input w-full mt-1" value={dateField} onChange={(e) => setDateField(e.target.value)} disabled={vizLoading}>
+            <select
+              className="input w-full mt-1"
+              value={dateField}
+              onChange={(e) => setDateField(e.target.value)}
+              disabled={vizLoading}
+            >
               <option value="closingDate">Closing Date</option>
               <option value="saleDate">Sale Date</option>
             </select>
@@ -393,20 +574,39 @@ function SalesReport() {
 
           <div>
             <span className="text-sm font-medium invisible">Clear</span>
-            <button onClick={handleClearFilters} disabled={vizLoading} className="flex items-center justify-center w-full input bg-gray-100 hover:bg-gray-200 mt-1 text-gray-700">
+            <button
+              onClick={handleClearFilters}
+              disabled={vizLoading}
+              className="flex items-center justify-center w-full input bg-gray-100 hover:bg-gray-200 mt-1 text-gray-700"
+            >
               <X className="w-4 h-4 mr-1" />
               Clear Filters
             </button>
           </div>
 
-          {vizLoading && <span className="text-sm text-gray-500 animate-pulse col-span-full">Loading data...</span>}
-          {vizError && <span className="text-sm text-red-500 col-span-full">{vizError}</span>}
+          {vizLoading && (
+            <span className="text-sm text-gray-500 animate-pulse col-span-full">
+              Loading data...
+            </span>
+          )}
+          {vizError && (
+            <span className="text-sm text-red-500 col-span-full">
+              {vizError}
+            </span>
+          )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
         {kpis.map((kpi) => (
-          <KpiCard key={kpi.title} title={kpi.title} value={kpi.value || 0} format={kpi.format} color={kpi.color} variant={kpi.variant} />
+          <KpiCard
+            key={kpi.title}
+            title={kpi.title}
+            value={kpi.value || 0}
+            format={kpi.format}
+            color={kpi.color}
+            variant={kpi.variant}
+          />
         ))}
       </div>
 
@@ -417,14 +617,20 @@ function SalesReport() {
           </ChartCard>
         </div>
         <div className="lg:col-span-2">
-          <ChartCard title="Sales by Property Type (Top 5)" vizLoading={vizLoading}>
+          <ChartCard
+            title="Sales by Property Type (Top 5)"
+            vizLoading={vizLoading}
+          >
             <Bar data={topPropData} options={topPropOptions} />
           </ChartCard>
         </div>
       </div>
 
       <div className="grid grid-cols-1">
-        <ChartCard title="Top Agent Performance (Top 5)" vizLoading={vizLoading}>
+        <ChartCard
+          title="Top Agent Performance (Top 5)"
+          vizLoading={vizLoading}
+        >
           <Bar data={topAgentData} options={topAgentOptions} />
         </ChartCard>
       </div>
@@ -463,18 +669,17 @@ function UnitsReport() {
           AnalyticsAPI.dashboard(filters), // This gets filtered KPIs
           AnalyticsAPI.propertyPerformance(filters), // This gets filtered properties
         ]);
-        
+
         if (!active) return;
-        
+
         // Use filteredDashData for KPIs and Doughnut
         setDash(d || {});
-        
+
         // Set properties for Bar Chart
         if (allProperties.length === 0) {
           setAllProperties(p || []);
         }
         setFilteredProperties(p || []);
-
       } catch (e) {
         if (!active) return;
         console.error("Units report fetch error:", e);
@@ -494,10 +699,11 @@ function UnitsReport() {
   // Fetch all properties *once* on mount for the dropdown
   useEffect(() => {
     AnalyticsAPI.propertyPerformance({})
-      .then(p => setAllProperties(p || []))
-      .catch(e => console.error("Failed to fetch all properties for filter", e));
-  }, []); 
-
+      .then((p) => setAllProperties(p || []))
+      .catch((e) =>
+        console.error("Failed to fetch all properties for filter", e)
+      );
+  }, []);
 
   // --- MEMOIZED DATA for Units Tab ---
 
@@ -520,17 +726,27 @@ function UnitsReport() {
     return dash;
   }, [dash, filteredProperties, propertyFilter]);
 
-
   // Doughnut chart should now ALSO reflect filters
   const unitStatusData = useMemo(() => {
     const items = [
-      { label: "Available", value: kpiData.availableUnits || 0, color: "#10B981" },
+      {
+        label: "Available",
+        value: kpiData.availableUnits || 0,
+        color: "#10B981",
+      },
       { label: "Sold", value: kpiData.soldUnits || 0, color: "#4F46E5" },
       { label: "Rented", value: kpiData.rentedUnits || 0, color: "#F59E0B" },
     ].filter((i) => i.value > 0);
     return {
       labels: items.map((i) => i.label),
-      datasets: [{ data: items.map((i) => i.value), backgroundColor: items.map((i) => i.color), borderColor: "#fff", borderWidth: 2 }],
+      datasets: [
+        {
+          data: items.map((i) => i.value),
+          backgroundColor: items.map((i) => i.color),
+          borderColor: "#fff",
+          borderWidth: 2,
+        },
+      ],
     };
   }, [kpiData]); // Depends on the new kpiData
 
@@ -546,40 +762,87 @@ function UnitsReport() {
     return {
       labels: props.map((p) => p.propertyName),
       datasets: [
-        { label: "Available", data: props.map((p) => p.availableUnits || 0), backgroundColor: "#10B981" },
-        { label: "Sold", data: props.map((p) => p.soldUnits || 0), backgroundColor: "#4F46E5" },
-        { label: "Rented", data: props.map((p) => p.rentedUnits || 0), backgroundColor: "#F59E0B" },
+        {
+          label: "Available",
+          data: props.map((p) => p.availableUnits || 0),
+          backgroundColor: "#10B981",
+        },
+        {
+          label: "Sold",
+          data: props.map((p) => p.soldUnits || 0),
+          backgroundColor: "#4F46E5",
+        },
+        {
+          label: "Rented",
+          data: props.map((p) => p.rentedUnits || 0),
+          backgroundColor: "#F59E0B",
+        },
       ],
     };
   }, [chartProperties]);
 
   const unitStatusByPropOptions = {
-    responsive: true, maintainAspectRatio: false,
+    responsive: true,
+    maintainAspectRatio: false,
     plugins: {
       legend: { position: "bottom" },
-      tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${context.raw || 0} units` } },
+      tooltip: {
+        callbacks: {
+          label: (context) =>
+            `${context.dataset.label}: ${context.raw || 0} units`,
+        },
+      },
     },
     scales: {
-      x: { stacked: true, title: { display: true, text: "Property" }, ticks: { autoSkip: false, maxRotation: 45, minRotation: 0 } },
-      y: { stacked: true, beginAtZero: true, title: { display: true, text: "Count of Units" } },
+      x: {
+        stacked: true,
+        title: { display: true, text: "Property" },
+        ticks: { autoSkip: false, maxRotation: 45, minRotation: 0 },
+      },
+      y: {
+        stacked: true,
+        beginAtZero: true,
+        title: { display: true, text: "Count of Units" },
+      },
     },
   };
 
   const kpis = [
-    { title: "Total Units", value: kpiData.totalUnits, icon: Building, color: "blue" },
-    { title: "Available Units", value: kpiData.availableUnits, icon: Home, color: "green" },
-    { title: "Sold Units", value: kpiData.soldUnits, icon: Package, color: "indigo" },
-    { title: "Rented Units", value: kpiData.rentedUnits, icon: KeyRound, color: "amber" },
+    {
+      title: "Total Units",
+      value: kpiData.totalUnits,
+      icon: Building,
+      color: "blue",
+    },
+    {
+      title: "Available Units",
+      value: kpiData.availableUnits,
+      icon: Home,
+      color: "green",
+    },
+    {
+      title: "Sold Units",
+      value: kpiData.soldUnits,
+      icon: Package,
+      color: "indigo",
+    },
+    {
+      title: "Rented Units",
+      value: kpiData.rentedUnits,
+      icon: KeyRound,
+      color: "amber",
+    },
   ];
 
   const doughnutOptions = {
-    responsive: true, maintainAspectRatio: false,
+    responsive: true,
+    maintainAspectRatio: false,
     plugins: { legend: { position: "bottom" } },
   };
 
   const propertyOptions = useMemo(() => {
-    return (allProperties || []).map(p => ({
-      id: p.propertyId, 
+    return (allProperties || []).map((p) => ({
+      id: p.propertyId,
       name: p.propertyName,
     }));
   }, [allProperties]);
@@ -594,30 +857,32 @@ function UnitsReport() {
       <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
           <div className="flex items-center gap-2 col-span-1 md:col-span-2 lg:col-span-3">
-             <Filter className="w-5 h-5 text-gray-700" />
+            <Filter className="w-5 h-5 text-gray-700" />
             <span className="text-lg font-semibold text-gray-700">
               Unit Filters
             </span>
           </div>
-          
+
           <label>
             <span className="text-sm font-medium">Property:</span>
-            <select 
-              className="input w-full mt-1" 
+            <select
+              className="input w-full mt-1"
               disabled={vizLoading}
               value={propertyFilter}
               onChange={(e) => setPropertyFilter(e.target.value)}
             >
               <option value="">All Properties</option>
-              {propertyOptions.map(prop => (
-                <option key={prop.id} value={prop.id}>{prop.name}</option>
+              {propertyOptions.map((prop) => (
+                <option key={prop.id} value={prop.id}>
+                  {prop.name}
+                </option>
               ))}
             </select>
           </label>
           <label>
             <span className="text-sm font-medium">Unit Status:</span>
-            <select 
-              className="input w-full mt-1" 
+            <select
+              className="input w-full mt-1"
               disabled={vizLoading}
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
@@ -628,12 +893,12 @@ function UnitsReport() {
               <option value="rented">Rented</option>
             </select>
           </label>
-          
+
           <div>
             <span className="text-sm font-medium invisible">Clear</span>
-            <button 
-              onClick={handleClearUnitFilters} 
-              disabled={vizLoading} 
+            <button
+              onClick={handleClearUnitFilters}
+              disabled={vizLoading}
               className="flex items-center justify-center w-full input bg-gray-100 hover:bg-gray-200 mt-1 text-gray-700"
             >
               <X className="w-4 h-4 mr-1" />
@@ -645,19 +910,42 @@ function UnitsReport() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         {kpis.map((kpi) => (
-          <KpiCard key={kpi.title} title={kpi.title} value={kpi.value || 0} icon={kpi.icon} color={kpi.color} />
+          <KpiCard
+            key={kpi.title}
+            title={kpi.title}
+            value={kpi.value || 0}
+            icon={kpi.icon}
+            color={kpi.color}
+          />
         ))}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1">
-          <ChartCard title={propertyFilter || statusFilter ? "Unit Status (Filtered)" : "Unit Status (Global)"} vizLoading={vizLoading}>
+          <ChartCard
+            title={
+              propertyFilter || statusFilter
+                ? "Unit Status (Filtered)"
+                : "Unit Status (Global)"
+            }
+            vizLoading={vizLoading}
+          >
             <Doughnut data={unitStatusData} options={doughnutOptions} />
           </ChartCard>
         </div>
         <div className="md:col-span-1 lg:col-span-2">
-          <ChartCard title={propertyFilter ? "Unit Status for Selected Property" : "Unit Status by Property"} vizLoading={vizLoading}>
-            <Bar data={unitStatusByPropData} options={unitStatusByPropOptions} />
+          <ChartCard
+            title={
+              propertyFilter
+                ? "Unit Status for Selected Property"
+                : "Unit Status by Property"
+            }
+            vizLoading={vizLoading}
+          >
+            <Bar
+              data={unitStatusByPropData}
+              options={unitStatusByPropOptions}
+            />
           </ChartCard>
         </div>
       </div>
@@ -679,24 +967,23 @@ export default function Reports() {
       case "units":
         return <UnitsReport />;
       default:
-        return <SalesReport />; 
+        return <SalesReport />;
     }
   }, [activeTab]);
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6 bg-gray-50 min-h-screen">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Reports & Insights</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">
+          Reports & Insights
+        </h1>
         <p className="text-sm text-gray-500">Admin / Reports</p>
       </div>
 
       <Tabs activeTab={activeTab} onTabChange={setActiveTab} />
 
-      <div className="mt-6">
-        {currentTab}
-      </div>
+      <div className="mt-6">{currentTab}</div>
     </div>
   );
 }
 // #endregion
-
