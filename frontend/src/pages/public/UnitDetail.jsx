@@ -3,14 +3,27 @@ import { useParams, Link } from "react-router-dom";
 import { UnitsAPI } from "../../api/units";
 import { toast } from "react-toastify";
 import InquiryForm from "../../components/layout/InquiryForm";
-import { Image, Video, ChevronLeft, ChevronRight, X, MapPin } from "lucide-react";
+import {
+  Image,
+  Video,
+  ChevronLeft,
+  ChevronRight,
+  Building2,
+  X,
+  MapPin,
+  Ruler,
+  Square,
+  BedDouble,
+  Bath,
+  Car,
+} from "lucide-react";
 
 /*
   UI-only improvements:
-  - Elevated visual style to match the PropertyDetail/other admin modals.
-  - Added icons, subtle gradients, colored status badges, nicer photo grid, improved lightbox controls.
-  - Amenities are more prominent (pill chips with subtle gradient).
-  - Kept all logic / API calls unchanged (only markup/styles updated).
+  - Elevated visual style to match PropertyDetail.
+  - Added icons for specifications.
+  - More polished layout with visual hierarchy.
+  - Kept all logic / API calls unchanged.
 */
 
 function toEmbed(url) {
@@ -35,17 +48,13 @@ export default function UnitDetail() {
   useEffect(() => {
     if (unitId) {
       setLoading(true);
-      UnitsAPI.get(unitId) // NOTE: Assuming UnitsAPI.get(id) exists
-        .then((data) => {
-          setUnit(data);
-        })
+      UnitsAPI.get(unitId)
+        .then((data) => setUnit(data))
         .catch((err) => {
           console.error("Failed to load unit:", err);
           toast.error("Failed to load unit details.");
         })
-        .finally(() => {
-          setLoading(false);
-        });
+        .finally(() => setLoading(false));
     }
   }, [unitId]);
 
@@ -56,11 +65,10 @@ export default function UnitDetail() {
     specifications = {},
     price = 0,
     photos = [],
-    thumbnail,
     videoTours = [],
     amenities = [],
     description,
-    property: propertyInfo, // Assuming .get() populates this like .list() does
+    property: propertyInfo,
     status,
     unitNumber,
   } = unit;
@@ -73,12 +81,10 @@ export default function UnitDetail() {
     parking = 0,
   } = specifications;
 
-  // Use unit-specific photos, fallback to property thumbnail
   const displayPhotos = photos.length
     ? photos
     : [propertyInfo?.thumbnail].filter(Boolean);
 
-  // Lightbox functions (from PropertyDetail.jsx)
   const openLightbox = (i) => setLightbox({ open: true, index: i });
   const closeLightbox = () => setLightbox({ open: false, index: 0 });
   const prev = (e) => {
@@ -105,35 +111,42 @@ export default function UnitDetail() {
 
   return (
     <div className="py-6 container-page">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => history.back()}
-            className="inline-flex items-center gap-2 text-sm text-slate-700 hover:text-slate-900"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Back
-          </button>
-          {propertyInfo && (
-            <Link
-              to={`/properties/${propertyInfo._id}`}
-              className="text-sm text-slate-600 underline"
-            >
-              View Parent Property →
-            </Link>
-          )}
-        </div>
-      </div>
+     <div className="flex items-center justify-between mb-4">
+  <div className="flex items-center gap-3">
+    {/* Back button */}
+    <button
+      onClick={() => history.back()}
+      className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-emerald-700 transition-colors"
+    >
+      <ChevronLeft className="w-4 h-4" />
+      Back
+    </button>
+
+    {/* View Parent Property link */}
+    {propertyInfo && (
+      <Link
+        to={`/properties/${propertyInfo._id}`}
+        className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-emerald-700 transition-colors"
+      >
+        <Building2 className="w-4 h-4" />
+        View Parent Property
+      </Link>
+    )}
+  </div>
+</div>
 
       <div className="grid lg:grid-cols-[1fr_340px] gap-6">
         <main>
-          {/* Hero image */}
+          {/* Hero Image */}
           <div
             className="relative cursor-zoom-in group rounded-lg overflow-hidden shadow-sm"
             onClick={() => openLightbox(0)}
           >
             <img
-              src={displayPhotos?.[0] || "https://via.placeholder.com/1024x576?text=Unit"}
+              src={
+                displayPhotos?.[0] ||
+                "https://via.placeholder.com/1024x576?text=Unit"
+              }
               className="object-cover w-full h-72 md:h-96"
               alt={unitNumber || "Unit"}
             />
@@ -148,7 +161,7 @@ export default function UnitDetail() {
             </div>
           </div>
 
-          {/* Thumbnail Grid */}
+          {/* Thumbnails */}
           {displayPhotos?.length > 1 && (
             <div className="grid grid-cols-4 gap-2 mt-3">
               {displayPhotos.slice(1, 9).map((ph, i) => (
@@ -157,13 +170,17 @@ export default function UnitDetail() {
                   onClick={() => openLightbox(i + 1)}
                   className="block overflow-hidden rounded-md transform transition hover:scale-105 focus:outline-none focus:ring-2 focus:ring-emerald-200"
                 >
-                  <img src={ph} className="object-cover w-full h-24" alt={`Unit ${i + 1}`} />
+                  <img
+                    src={ph}
+                    className="object-cover w-full h-24"
+                    alt={`Unit ${i + 1}`}
+                  />
                 </button>
               ))}
             </div>
           )}
 
-          {/* Title & meta */}
+          {/* Title & Meta */}
           <div className="flex items-start justify-between mt-5 gap-4">
             <div className="min-w-0">
               <h1 className="text-2xl font-semibold leading-tight text-slate-900">
@@ -177,12 +194,21 @@ export default function UnitDetail() {
                   </span>
                 </div>
                 <div className="text-slate-300">•</div>
-                <div className="text-sm text-slate-500">Status: <span className={`ml-2 inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${statusClasses}`}>{status}</span></div>
+                <div className="text-sm text-slate-500">
+                  Status:{" "}
+                  <span
+                    className={`ml-2 inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${statusClasses}`}
+                  >
+                    {status}
+                  </span>
+                </div>
               </div>
             </div>
 
             <div className="flex flex-col items-end gap-2">
-              <div className="text-lg font-bold text-slate-900">₱ {Number(price).toLocaleString()}</div>
+              <div className="text-lg font-bold text-slate-900">
+                ₱ {Number(price).toLocaleString()}
+              </div>
               {videoTours?.[0] && (
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-50 border border-amber-100 text-amber-700 text-sm">
                   <Video className="w-4 h-4" />
@@ -192,15 +218,49 @@ export default function UnitDetail() {
             </div>
           </div>
 
-          {/* Specifications */}
-          <section className="mt-6">
-            <h3 className="mb-3 text-lg font-medium text-slate-800">Specifications</h3>
-            <div className="grid gap-2 p-3 text-sm rounded bg-slate-50 md:grid-cols-3">
-              {lotArea > 0 && (<div>Lot Area: <strong>{lotArea} sqm</strong></div>)}
-              {floorArea > 0 && (<div>Floor Area: <strong>{floorArea} sqm</strong></div>)}
-              {bedrooms > 0 && (<div>Bedrooms: <strong>{bedrooms}</strong></div>)}
-              {bathrooms > 0 && (<div>Bathrooms: <strong>{bathrooms}</strong></div>)}
-              {parking > 0 && (<div>Parking: <strong>{parking}</strong></div>)}
+          {/* Specifications — Improved */}
+          <section className="mt-8">
+            <h3 className="mb-5 text-xl font-semibold text-slate-800 flex items-center gap-2">
+              <Square className="w-6 h-6 text-emerald-600" />
+              Specifications
+            </h3>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {lotArea > 0 && (
+                <div className="flex flex-col items-center justify-center p-4 bg-white rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-all">
+                  <Ruler className="w-7 h-7 text-emerald-600 mb-2" />
+                  <p className="text-sm text-slate-500">Lot Area</p>
+                  <p className="font-medium text-slate-900">{lotArea} sqm</p>
+                </div>
+              )}
+              {floorArea > 0 && (
+                <div className="flex flex-col items-center justify-center p-4 bg-white rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-all">
+                  <Square className="w-7 h-7 text-emerald-600 mb-2" />
+                  <p className="text-sm text-slate-500">Floor Area</p>
+                  <p className="font-medium text-slate-900">{floorArea} sqm</p>
+                </div>
+              )}
+              {bedrooms > 0 && (
+                <div className="flex flex-col items-center justify-center p-4 bg-white rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-all">
+                  <BedDouble className="w-7 h-7 text-emerald-600 mb-2" />
+                  <p className="text-sm text-slate-500">Bedrooms</p>
+                  <p className="font-medium text-slate-900">{bedrooms}</p>
+                </div>
+              )}
+              {bathrooms > 0 && (
+                <div className="flex flex-col items-center justify-center p-4 bg-white rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-all">
+                  <Bath className="w-7 h-7 text-emerald-600 mb-2" />
+                  <p className="text-sm text-slate-500">Bathrooms</p>
+                  <p className="font-medium text-slate-900">{bathrooms}</p>
+                </div>
+              )}
+              {parking > 0 && (
+                <div className="flex flex-col items-center justify-center p-4 bg-white rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-all">
+                  <Car className="w-7 h-7 text-emerald-600 mb-2" />
+                  <p className="text-sm text-slate-500">Parking</p>
+                  <p className="font-medium text-slate-900">{parking}</p>
+                </div>
+              )}
             </div>
           </section>
 
@@ -209,7 +269,7 @@ export default function UnitDetail() {
             <section className="mt-6">
               <h3 className="mb-3 text-lg font-medium text-slate-800 flex items-center gap-2">
                 <Video className="w-5 h-5 text-amber-600" />
-                Unit video tour
+                Unit Video Tour
               </h3>
               <div className="w-full overflow-hidden bg-black rounded-lg aspect-video">
                 <iframe
@@ -223,10 +283,12 @@ export default function UnitDetail() {
             </section>
           )}
 
-          {/* Amenities - elevated */}
+          {/* Amenities */}
           {amenities?.length > 0 && (
             <section className="mt-6">
-              <h3 className="mb-3 text-lg font-medium text-slate-800">Amenities</h3>
+              <h3 className="mb-3 text-lg font-medium text-slate-800">
+                Amenities
+              </h3>
               <div className="flex flex-wrap gap-3">
                 {amenities.map((a, i) => (
                   <div
@@ -243,24 +305,31 @@ export default function UnitDetail() {
           {/* Description */}
           {description && (
             <section className="mt-6">
-              <h3 className="mb-2 text-lg font-medium text-slate-800">Description</h3>
-              <p className="text-sm text-slate-700 leading-relaxed">{description}</p>
+              <h3 className="mb-2 text-lg font-medium text-slate-800">
+                Description
+              </h3>
+              <p className="text-sm text-slate-700 leading-relaxed">
+                {description}
+              </p>
             </section>
           )}
         </main>
 
         {/* Aside / Inquiry */}
         <aside className="p-4 bg-white rounded-lg shadow-sm h-fit">
-          <div className="mb-3 text-base font-medium">Inquire about this Unit</div>
+          <div className="mb-3 text-base font-medium">
+            Inquire about this Unit
+          </div>
           <InquiryForm
             propertyId={propertyInfo?._id}
             propertyName={propertyInfo?.propertyName}
-            // InquiryForm may be enhanced to accept unitNumber
           />
 
           <div className="p-3 mt-6 text-sm rounded-md bg-slate-50 border border-slate-100">
             <div className="mb-1 font-medium text-slate-800">Contact Us</div>
-            <div className="text-slate-600">Brgy. San Isidro, Cabanatuan City, Nueva Ecija, Philippines</div>
+            <div className="text-slate-600">
+              Brgy. San Isidro, Cabanatuan City, Nueva Ecija, Philippines
+            </div>
             <div className="text-slate-600 mt-1">+63 966 752 7631</div>
             <div className="text-slate-600 mt-1">info@giewellzon.com</div>
           </div>
