@@ -3,7 +3,7 @@ import { toast } from "react-toastify";
 // Import BOTH APIs
 import { PropertiesAPI } from "../../api/properties";
 import { UnitsAPI } from "../../api/units";
-import { X, Cloud, Image, Trash2, Plus } from "lucide-react";
+import { X, Cloud, Image, Trash2, Plus, Save } from "lucide-react"; // Added Save icon
 
 /*
   UI-only update to match the SalesModals/PropertyEditor aesthetic:
@@ -44,6 +44,9 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
   const [newPhotos, setNewPhotos] = useState([]);
   const [newPhotoPreviews, setNewPhotoPreviews] = useState([]);
   const [existingPhotos, setExistingPhotos] = useState([]);
+
+  // --- NEW: State for update confirmation modal ---
+  const [isUpdateConfirmModalOpen, setIsUpdateConfirmModalOpen] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -156,12 +159,9 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
     e.target.value = null;
   };
 
-  async function save(e) {
+  // --- UPDATED: This is the form's submit handler ---
+  async function handleSubmit(e) {
     e.preventDefault();
-    if (editing) {
-      const confirmed = window.confirm("Are you sure you want to update this unit?");
-      if (!confirmed) return;
-    }
 
     const validationErrors = validate();
     setErrors(validationErrors);
@@ -170,6 +170,18 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
       return;
     }
 
+    if (editing) {
+      // If editing, open the confirmation modal
+      setIsUpdateConfirmModalOpen(true);
+    } else {
+      // If creating new, save immediately
+      await handleConfirmSave();
+    }
+  }
+
+  // --- NEW: This function contains the actual save logic ---
+  async function handleConfirmSave() {
+    setIsUpdateConfirmModalOpen(false); // Close modal
     setLoading(true);
     try {
       const payload = {
@@ -250,7 +262,7 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
   return (
     <div className="fixed inset-0 z-50 grid p-4 overflow-y-auto bg-black/60 place-items-center">
       <form
-        onSubmit={save}
+        onSubmit={handleSubmit} // --- UPDATED ---
         className="w-full max-w-2xl p-6 my-8 space-y-6 bg-white rounded-xl shadow-2xl ring-1 ring-black/5"
         aria-modal="true"
         role="dialog"
@@ -461,6 +473,15 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
           </button>
         </div>
       </form>
+
+      {/* --- NEW: Add the confirmation modal call --- */}
+      <ConfirmUpdateModal
+        open={isUpdateConfirmModalOpen}
+        onClose={() => setIsUpdateConfirmModalOpen(false)}
+        onConfirm={handleConfirmSave} // Calls the renamed save function
+        unitName={form.unitNumber || "this unit"}
+        isLoading={loading} // Use the main loading state
+      />
     </div>
   );
 }
@@ -493,4 +514,84 @@ function isValidYouTubeUrl(url) {
   } catch {
     return false;
   }
+}
+
+
+// --- NEW: Custom Confirmation Modal Component for Updating ---
+function ConfirmUpdateModal({ open, onClose, onConfirm, unitName, isLoading }) {
+  if (!open) return null;
+
+  return (
+    // Use z-[60] to appear on top of the first modal (which is z-50)
+    <div className="fixed inset-0 z-[60] grid p-4 overflow-y-auto bg-black/60 place-items-center">
+      <div
+        className="w-full max-w-md p-6 bg-white rounded-xl shadow-2xl ring-1 ring-black/5"
+        aria-modal="true"
+        role="dialog"
+      >
+        <header className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-blue-100 text-blue-600 shadow">
+              <Save className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800">
+                Confirm Update
+              </h2>
+              <p className="text-sm text-gray-500 mt-0.5">
+                Are you sure?
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center justify-center w-9 h-9 rounded-md text-gray-600 hover:bg-gray-100 transition"
+            aria-label="Close"
+            disabled={isLoading}
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </header>
+
+        <div className="mt-4 text-sm text-gray-700 space-y-3">
+          <p>
+            You are about to save changes for:
+            <strong className="block text-base text-gray-900 my-1">{unitName}</strong>
+          </p>
+          <p>Please confirm you want to apply these updates.</p>
+        </div>
+
+        <div className="flex justify-end gap-3 pt-6 border-t mt-6">
+          <button
+            type="button"
+            className="px-3 py-2 rounded-md text-sm font-medium bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100 transition"
+            onClick={onClose}
+            disabled={isLoading}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-white font-semibold shadow-md transition"
+            style={{ background: "linear-gradient(90deg,#10B981 0%,#047857 100%)" }} // Green button
+            onClick={onConfirm}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                  <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" strokeLinecap="round" className="opacity-75" />
+                </svg>
+                Saving...
+              </>
+            ) : (
+              "Confirm Update"
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
