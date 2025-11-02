@@ -49,6 +49,7 @@ export default function UnitDetail() {
     price = 0,
     photos = [],
     videoTours = [],
+    amenities = [],
     description,
     property: propertyInfo, // Assuming .get() populates this like .list() does
   } = unit;
@@ -192,6 +193,23 @@ export default function UnitDetail() {
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
                 />
+              </div>
+            </div>
+          )}
+
+          {/* Amenities */}
+          {amenities?.length > 0 && (
+            <div className="mt-6">
+              <h3 className="mb-2 font-medium">Amenities</h3>
+              <div className="flex flex-wrap gap-2">
+                {amenities.map((a, i) => (
+                  <span
+                    key={i}
+                    className="px-2 py-1 text-xs rounded bg-brand-light"
+                  >
+                    {a}
+                  </span>
+                ))}
               </div>
             </div>
           )}

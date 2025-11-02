@@ -16,6 +16,9 @@ const BLANK_FORM = {
     parking: "",
   },
   soldDate: "",
+  // New fields supported by backend schema
+  amenities: [],
+  videoTours: [],
 };
 
 export default function UnitEditor({ open, onClose, editing, propertyId }) {
@@ -25,6 +28,7 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
   const [thumbPreview, setThumbPreview] = useState("");
   const [photos, setPhotos] = useState([]); // Additional unit photos
   const [loading, setLoading] = useState(false);
+  // No separate text inputs; follow PropertyEditor pattern with prompts and chips
 
   useEffect(() => {
     if (open) {
@@ -37,6 +41,8 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
             ...BLANK_FORM.specifications, // Start with blank specs
             ...(editing.specifications || {}), // Apply editing specs
           },
+          amenities: editing.amenities || [],
+          videoTours: editing.videoTours || [],
         }));
       } else {
         // Adding a new unit: reset the form
@@ -89,7 +95,12 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
 
     setLoading(true);
     try {
-      const payload = { ...form, price: Number(form.price) };
+      const payload = {
+        ...form,
+        price: Number(form.price),
+        amenities: form.amenities || [],
+        videoTours: form.videoTours || [],
+      };
       let res;
 
       if (editing) {
@@ -132,6 +143,27 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
     setForm((s) => ({
       ...s,
       specifications: { ...s.specifications, [key]: value },
+    }));
+  }
+
+  // Match PropertyEditor behavior for adding amenities and video links
+  function addAmenity() {
+    const v = prompt("Amenity name:");
+    if (v?.trim()) {
+      setForm((s) => ({ ...s, amenities: [...(s.amenities || []), v.trim()] }));
+    }
+  }
+
+  function addVideo() {
+    const url = prompt("YouTube URL:");
+    if (!url) return;
+    if (!isValidYouTubeUrl(url)) {
+      toast.warn("Please enter a valid YouTube URL.");
+      return;
+    }
+    setForm((s) => ({
+      ...s,
+      videoTours: [...(s.videoTours || []), url.trim()],
     }));
   }
 
@@ -263,6 +295,70 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
           </div>
         </div>
 
+        {/* === Video Tours (same style as PropertyEditor) === */}
+        <div>
+          <div className="mb-2 font-medium">Video Tour</div>
+          <button
+            type="button"
+            className="px-3 py-1 text-sm border rounded"
+            onClick={addVideo}
+          >
+            Add YouTube URL
+          </button>
+          <ul className="mt-2 ml-6 text-sm list-disc">
+            {(form.videoTours || []).map((v, i) => (
+              <li key={i} className="flex items-center gap-2">
+                <span className="truncate">{v}</span>
+                <button
+                  type="button"
+                  className="text-xs text-brand-secondary"
+                  onClick={() =>
+                    setForm((s) => ({
+                      ...s,
+                      videoTours: s.videoTours.filter((_, idx) => idx !== i),
+                    }))
+                  }
+                >
+                  remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* === Amenities (same style as PropertyEditor) === */}
+        <div>
+          <div className="mb-2 font-medium">Amenities</div>
+          <button
+            type="button"
+            className="px-3 py-1 text-sm border rounded"
+            onClick={addAmenity}
+          >
+            Add Amenity
+          </button>
+          <div className="flex flex-wrap gap-2 mt-2">
+            {(form.amenities || []).map((a, i) => (
+              <span key={i} className="px-2 py-1 text-xs rounded bg-brand-light">
+                {a}{" "}
+                <button
+                  type="button"
+                  className="ml-1 text-brand-secondary"
+                  onClick={() => {
+                    if (window.confirm(`Are you sure you want to remove "${a}"?`)) {
+                      setForm((s) => ({
+                        ...s,
+                        amenities: s.amenities.filter((_, idx) => idx !== i),
+                      }));
+                    }
+                  }}
+                >
+                  x
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+
         {/* === BUTTONS === */}
         <div className="flex justify-end gap-2">
           <button
@@ -306,3 +402,19 @@ function Spec({ label, value, onChange }) {
     </div>
   );
 }
+
+// --- Local actions for amenities and video tours (match PropertyEditor behavior) ---
+function isValidYouTubeUrl(url) {
+  if (!url) return false;
+  try {
+    const u = new URL(url);
+    return (
+      u.hostname === "youtu.be" ||
+      u.hostname.includes("youtube.com") ||
+      url.startsWith("https://")
+    );
+  } catch {
+    return false;
+  }
+}
+
