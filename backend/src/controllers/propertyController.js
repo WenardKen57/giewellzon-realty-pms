@@ -224,10 +224,13 @@ async function uploadSiteMap(req, res, next) {
 }
 
 // Get featured *Properties* (buildings)
+// Enhanced to return quick engagement details for the homepage cards:
+// - availableUnits: count of units with status 'available'
+// - minPrice: lowest price among available units
+// Note: We still avoid returning the full units array for performance.
 async function getFeaturedProperties(req, res, next) {
   try {
     const limit = Math.min(Number(req.query.limit) || 6, 20);
-    // Finds featured properties that have at least one unit available
     const data = await Property.aggregate([
       { $match: { featured: true } },
       {
@@ -238,14 +241,51 @@ async function getFeaturedProperties(req, res, next) {
           as: "units",
         },
       },
+      // Compute engagement fields based on available units
       {
-        $match: {
-          "units.status": "available",
+        $addFields: {
+          availableUnits: {
+            $size: {
+              $filter: {
+                input: "$units",
+                as: "u",
+                cond: { $eq: ["$$u.status", "available"] },
+              },
+            },
+          },
+          minPrice: {
+            $min: {
+              $map: {
+                input: {
+                  $filter: {
+                    input: "$units",
+                    as: "u",
+                    cond: { $eq: ["$$u.status", "available"] },
+                  },
+                },
+                as: "u",
+                in: "$$u.price",
+              },
+            },
+          },
         },
       },
+      // Keep only properties with at least one available unit
+      { $match: { availableUnits: { $gt: 0 } } },
       { $sort: { createdAt: -1 } },
       { $limit: limit },
-      { $project: { units: 0 } }, // Don't return all units in this list
+      {
+        $project: {
+          // Include only the fields needed on the homepage
+          propertyName: 1,
+          city: 1,
+          province: 1,
+          thumbnail: 1,
+          propertyType: 1,
+          availableUnits: 1,
+          minPrice: 1,
+        },
+      },
     ]);
     res.json({ data });
   } catch (e) {
