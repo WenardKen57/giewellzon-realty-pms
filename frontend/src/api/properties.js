@@ -51,6 +51,14 @@ export const PropertiesAPI = {
       .then((r) => r.data);
   },
 
+  // --- NEW: Building Media Deletion ---
+  deleteThumbnail: (id) =>
+    api.delete(endpoints.properties.thumbnail(id)).then((r) => r.data),
+  deletePhoto: (id, photoUrl) =>
+    api
+      .delete(endpoints.properties.photo(id), { data: { photoUrl } }) // Send URL in body
+      .then((r) => r.data),
+
   // --- Unit management *relative* to this property ---
   listUnits: (propertyId) =>
     api.get(endpoints.properties.listUnits(propertyId)).then((r) => r.data),

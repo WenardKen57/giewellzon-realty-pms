@@ -1,3 +1,4 @@
+// routes/propertyRoutes.js
 // Filename: routes/property.routes.js
 
 const express = require("express");
@@ -43,6 +44,10 @@ router.post(
   uploadSiteMap.single("sitemap"),
   propertyCtrl.uploadSiteMap
 );
+
+// --- NEW: Property Media Deletion Routes ---
+router.delete("/:id/thumbnail", requireAuth, propertyCtrl.deleteThumbnail);
+router.delete("/:id/photo", requireAuth, propertyCtrl.deletePhoto);
 
 // ===================================
 // 🚪 UNIT ROUTES (relative to a Property)

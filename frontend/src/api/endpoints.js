@@ -31,6 +31,9 @@ export const endpoints = {
     createUnit: (propertyId) => `${API_BASE}/properties/${propertyId}/units`,
     provinces: `${API_BASE}/locations/provinces`,
     cities: (province) => `${API_BASE}/locations/provinces/${province}/cities`,
+    // --- NEW ---
+    thumbnail: (id) => `${API_BASE}/properties/${id}/thumbnail`, // For DELETE
+    photo: (id) => `${API_BASE}/properties/${id}/photo`, // For DELETE
   },
 
   units: {
