@@ -125,6 +125,7 @@ export function SaleFormModal({ open, onClose, editing }) {
 
   async function submit(e) {
     e.preventDefault();
+  
     if (!form.unitId) {
       toast.error("Please select a Unit.");
       return;
@@ -145,7 +146,13 @@ export function SaleFormModal({ open, onClose, editing }) {
       toast.error("Please enter a Sale Date.");
       return;
     }
-
+  
+    // ✅ Prevent invalid date sequence
+    if (form.closingDate && form.saleDate && form.closingDate < form.saleDate) {
+      toast.error("Closing date cannot be earlier than sale date.");
+      return;
+    }
+  
     setLoading(true);
     try {
       const payload = {
@@ -158,7 +165,7 @@ export function SaleFormModal({ open, onClose, editing }) {
         closingDate: form.closingDate || undefined,
       };
       delete payload.propertyId;
-
+  
       if (editing) {
         await SalesAPI.update(editing._id, payload);
         toast.success("Sale updated successfully!");
@@ -175,7 +182,7 @@ export function SaleFormModal({ open, onClose, editing }) {
     } finally {
       setLoading(false);
     }
-  }
+  }  
 
   return (
     <div className="fixed inset-0 z-50 grid p-4 overflow-y-auto bg-black/60 place-items-center">
