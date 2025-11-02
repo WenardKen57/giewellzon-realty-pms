@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { PropertiesAPI } from "../../api/properties";
 import { formatPHP } from "../../utils/format";
@@ -6,37 +6,14 @@ import { formatPHP } from "../../utils/format";
 export default function Home() {
   const [featured, setFeatured] = useState([]);
   const [loading, setLoading] = useState(true);
+  const featuredRef = useRef([]);
 
   useEffect(() => {
     const fetchFeatured = async () => {
       try {
         const res = await PropertiesAPI.getFeaturedProperties();
         const list = res.data || res || [];
-
-        // Fetch unit stats for each featured property (min price and available count)
-        const enriched = await Promise.all(
-          list.map(async (p) => {
-            try {
-              const units = await PropertiesAPI.listUnits(p._id);
-              const available = (units || []).filter(
-                (u) => u.status === "available"
-              );
-              const minPrice =
-                available.length > 0
-                  ? Math.min(
-                      ...available
-                        .map((u) => Number(u.price))
-                        .filter((n) => Number.isFinite(n))
-                    )
-                  : null;
-              return { ...p, availableUnits: available.length, minPrice };
-            } catch {
-              // If unit fetch fails, keep original property data
-              return { ...p };
-            }
-          })
-        );
-        setFeatured(enriched);
+        setFeatured(list);
       } catch (err) {
         console.error("Failed to load featured properties:", err);
       } finally {
@@ -44,6 +21,45 @@ export default function Home() {
       }
     };
     fetchFeatured();
+  }, []);
+
+  // Keep a ref of latest featured list for polling without stale closures
+  useEffect(() => {
+    featuredRef.current = featured;
+  }, [featured]);
+
+  // Lightweight polling to keep "Starting at" and "Available Units" interactive
+  useEffect(() => {
+    let cancelled = false;
+    const interval = setInterval(async () => {
+      if (document.hidden) return; // avoid background work
+      try {
+        const res = await PropertiesAPI.getFeaturedProperties();
+        const list = res.data || res || [];
+        if (!cancelled) setFeatured(list);
+      } catch {
+        // ignore polling errors silently
+      }
+    }, 20000); // refresh every 20s
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Refresh once when tab becomes visible again
+  useEffect(() => {
+    const onVisible = async () => {
+      if (document.hidden) return;
+      try {
+        const res = await PropertiesAPI.getFeaturedProperties();
+        const list = res.data || res || [];
+        setFeatured(list);
+      } catch {}
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
 
   return (
@@ -75,7 +91,7 @@ export default function Home() {
               </Link>
               <Link
                 to="/contact"
-                className="inline-block px-8 py-3 text-base font-medium text-white transition-all duration-300 bg-transparent border-2 border-white/80 rounded-lg hover:bg-white hover:text-green-700"
+                className="inline-block px-8 py-3 text-base font-medium text-white transition-all duration-300 bg-transparent border-2 rounded-lg border-white/80 hover:bg-white hover:text-green-700"
               >
                 Contact Us
               </Link>
@@ -131,7 +147,7 @@ export default function Home() {
                 <Link
                   key={p._id}
                   to={`/properties/${p._id}`}
-                  className="block w-full overflow-hidden transition-all duration-300 transform bg-white border border-gray-100 shadow-md group rounded-2xl hover:shadow-xl hover:scale-[1.02]"
+                  className="flex flex-col w-full h-full overflow-hidden transition-all duration-300 transform bg-white border border-gray-100 shadow-md group rounded-2xl hover:shadow-xl hover:scale-[1.02]"
                 >
                   <div className="relative overflow-hidden">
                     <img
@@ -148,13 +164,13 @@ export default function Home() {
                         Featured
                       </span>
                       {p.propertyType && (
-                        <span className="px-3 py-1 text-xs font-medium capitalize bg-white/90 text-green-800 rounded-full">
+                        <span className="px-3 py-1 text-xs font-medium text-green-800 capitalize rounded-full bg-white/90">
                           {p.propertyType}
                         </span>
                       )}
                     </div>
                   </div>
-                  <div className="p-5">
+                  <div className="flex flex-col flex-1 h-full p-5">
                     <h3 className="mb-1 text-xl font-bold text-green-800">
                       {p.propertyName}
                     </h3>
@@ -171,13 +187,13 @@ export default function Home() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-sm text-gray-500">Units</div>
+                        <div className="text-sm text-gray-500">Available Units</div>
                         <div className="text-lg font-bold text-gray-800">
                           {p.availableUnits ?? 0}
                         </div>
                       </div>
                     </div>
-                    <span className="inline-block w-full px-5 py-2 text-sm font-medium text-center text-white transition-all duration-300 bg-green-600 rounded-lg shadow-sm hover:bg-green-700 hover:shadow-md">
+                    <span className="inline-block w-full px-5 py-2 mt-auto text-sm font-medium text-center text-white transition-all duration-300 bg-green-600 rounded-lg shadow-sm hover:bg-green-700 hover:shadow-md">
                       View Details
                     </span>
                   </div>

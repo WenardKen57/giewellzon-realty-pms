@@ -226,7 +226,7 @@ async function uploadSiteMap(req, res, next) {
 // Get featured *Properties* (buildings)
 // Enhanced to return quick engagement details for the homepage cards:
 // - availableUnits: count of units with status 'available'
-// - minPrice: lowest price among available units
+// - minPrice: lowest price across ALL units (even if sold/rented)
 // Note: We still avoid returning the full units array for performance.
 async function getFeaturedProperties(req, res, next) {
   try {
@@ -241,7 +241,7 @@ async function getFeaturedProperties(req, res, next) {
           as: "units",
         },
       },
-      // Compute engagement fields based on available units
+      // Compute engagement fields
       {
         $addFields: {
           availableUnits: {
@@ -253,6 +253,7 @@ async function getFeaturedProperties(req, res, next) {
               },
             },
           },
+          // Lowest price across ALL units (ignore null/0/NaN)
           minPrice: {
             $min: {
               $map: {
@@ -260,7 +261,12 @@ async function getFeaturedProperties(req, res, next) {
                   $filter: {
                     input: "$units",
                     as: "u",
-                    cond: { $eq: ["$$u.status", "available"] },
+                    cond: {
+                      $and: [
+                        { $ne: ["$$u.price", null] },
+                        { $gt: ["$$u.price", 0] },
+                      ],
+                    },
                   },
                 },
                 as: "u",
@@ -270,8 +276,6 @@ async function getFeaturedProperties(req, res, next) {
           },
         },
       },
-      // Keep only properties with at least one available unit
-      { $match: { availableUnits: { $gt: 0 } } },
       { $sort: { createdAt: -1 } },
       { $limit: limit },
       {
