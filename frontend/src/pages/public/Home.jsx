@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { PropertiesAPI } from "../../api/properties";
+import { formatPHP } from "../../utils/format";
 
 export default function Home() {
   const [featured, setFeatured] = useState([]);
@@ -9,8 +10,9 @@ export default function Home() {
   useEffect(() => {
     const fetchFeatured = async () => {
       try {
-        const res = await PropertiesAPI.getFeaturedProperties();
-        setFeatured(res.data || res);
+  const res = await PropertiesAPI.getFeaturedProperties();
+  // API returns { data: [...] }
+  setFeatured(res.data || res);
       } catch (err) {
         console.error("Failed to load featured properties:", err);
       } finally {
@@ -24,7 +26,7 @@ export default function Home() {
     <div>
       {/* Hero Section */}
       <section
-        className="relative text-white bg-cover bg-center bg-no-repeat min-h-screen flex items-center"
+        className="relative flex items-center min-h-screen text-white bg-center bg-no-repeat bg-cover"
         style={{
           backgroundImage:
             "url('https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1920&q=80')",
@@ -37,7 +39,7 @@ export default function Home() {
             <h1 className="mb-3 text-4xl font-bold md:text-5xl">
               Find Your Ideal Home
             </h1>
-            <p className="mb-6 text-brand-light/90 text-lg">
+            <p className="mb-6 text-lg text-brand-light/90">
               Explore curated listings, schedule viewings, and connect with our
               team for financing options.
             </p>
@@ -70,27 +72,55 @@ export default function Home() {
           </p>
         ) : (
           <div className="grid gap-6 md:grid-cols-3">
-            {featured.map((property) => (
+            {featured.map((p) => (
               <Link
-                key={property._id}
-                to={`/properties/${property._id}`}
-                className="block rounded-lg overflow-hidden border hover:shadow-lg transition-shadow duration-300"
+                key={p._id}
+                to={`/properties/${p._id}`}
+                className="block overflow-hidden transition-all duration-300 bg-white border group rounded-xl hover:shadow-xl"
               >
-                <img
-                  src={
-                    property.thumbnail ||
-                    "https://placehold.co/600x400?text=No+Image"
-                  }
-                  alt={property.title}
-                  className="w-full h-48 object-cover"
-                />
+                <div className="relative">
+                  <img
+                    src={p.thumbnail || "https://placehold.co/800x500?text=No+Image"}
+                    alt={p.propertyName}
+                    className="object-cover w-full h-52"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                  <div className="absolute flex gap-2 top-3 left-3">
+                    <span className="px-2 py-1 text-xs text-white rounded bg-brand-primary">
+                      Featured
+                    </span>
+                    {p.propertyType && (
+                      <span className="px-2 py-1 text-xs rounded bg-white/90 text-brand-primary">
+                        {p.propertyType}
+                      </span>
+                    )}
+                  </div>
+                </div>
                 <div className="p-4">
-                  <h3 className="text-lg font-semibold text-brand-primary">
-                    {property.title}
+                  <h3 className="mb-1 text-lg font-semibold text-brand-primary">
+                    {p.propertyName}
                   </h3>
-                  <p className="text-neutral-600 text-sm">
-                    {property.location?.city}, {property.location?.province}
+                  <p className="mb-3 text-sm text-neutral-600">
+                    {p.city && p.province ? `${p.city}, ${p.province}` : p.city || p.province || ""}
                   </p>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm text-neutral-500">Starting at</div>
+                      <div className="font-semibold">
+                        {p.minPrice != null ? formatPHP(p.minPrice) : "—"}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm text-neutral-500">Units Available</div>
+                      <div className="font-semibold">{p.availableUnits ?? 0}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <span className="inline-block w-full text-center btn btn-secondary">
+                      View details
+                    </span>
+                  </div>
                 </div>
               </Link>
             ))}
@@ -120,9 +150,9 @@ export default function Home() {
           ].map((item) => (
             <div
               key={item.title}
-              className="p-6 card shadow-md hover:shadow-lg transition-shadow duration-300"
+              className="p-6 transition-shadow duration-300 shadow-md card hover:shadow-lg"
             >
-              <div className="mb-2 font-medium text-brand-primary text-lg">
+              <div className="mb-2 text-lg font-medium text-brand-primary">
                 {item.title}
               </div>
               <p className="text-sm text-neutral-700">{item.desc}</p>
