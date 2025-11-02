@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 // *** ADD useLocation ***
-import { useParams, useLocation } from "react-router-dom";
+import { useParams, useLocation, Link } from "react-router-dom";
 import { PropertiesAPI } from "../../api/properties";
 import InquiryForm from "../../components/layout/InquiryForm";
 
@@ -48,42 +48,11 @@ export default function PropertyDetail() {
     }
   }, [location.hash, p]); // Re-run if hash changes or property data loads
 
-  // 🧠 Group available units
-  const groupedUnits = useMemo(() => {
-    if (!p?.units) return [];
-
-    const availableUnits = p.units.filter((u) => u.status === "available");
-
-    const groups = availableUnits.reduce((acc, unit) => {
-      const { specifications, price, photos = [] } = unit;
-      const {
-        bedrooms = 0,
-        bathrooms = 0,
-        floorArea = 0,
-      } = specifications || {};
-
-      // This key MUST match the key generated in Properties.jsx
-      const key = `beds-${bedrooms}-baths-${bathrooms}-sqm-${floorArea}`;
-
-      if (!acc[key]) {
-        acc[key] = {
-          key,
-          specifications,
-          count: 0,
-          minPrice: price,
-          photos: [],
-        };
-      }
-
-      acc[key].count += 1;
-      acc[key].photos.push(...photos);
-      if (price < acc[key].minPrice) acc[key].minPrice = price;
-
-      return acc;
-    }, {});
-
-    return Object.values(groups);
-  }, [p?.units]);
+  // Prepare the list of available units
+  const availableUnits = useMemo(
+    () => (p?.units || []).filter((u) => u.status === "available"),
+    [p?.units]
+  );
 
   if (!p) return <div className="py-10 container-page">Loading...</div>;
 
@@ -127,7 +96,7 @@ export default function PropertyDetail() {
               alt={p.propertyName}
             />
             <div className="absolute inset-0 flex items-center justify-center transition-opacity opacity-0 bg-black/30 group-hover:opacity-100">
-              <span className="text-white text-sm">Click to enlarge</span>
+              <span className="text-sm text-white">Click to enlarge</span>
             </div>
           </div>
 
@@ -183,10 +152,8 @@ export default function PropertyDetail() {
           <div className="mt-6">
             <h3 className="mb-2 font-medium">Available Units</h3>
             <div className="space-y-3">
-              {groupedUnits.length > 0 ? (
-                groupedUnits.map((group) => (
-                  <UnitGroupCard key={group.key} group={group} />
-                ))
+              {availableUnits.length > 0 ? (
+                availableUnits.map((u) => <UnitRow key={u._id} unit={u} />)
               ) : (
                 <p className="text-sm text-neutral-700">
                   No units currently listed for this property.
@@ -203,7 +170,7 @@ export default function PropertyDetail() {
                 {p.amenities.map((a, i) => (
                   <div
                     key={i}
-                    className="px-3 py-1 text-sm rounded-full bg-brand-light border border-brand-gray"
+                    className="px-3 py-1 text-sm border rounded-full bg-brand-light border-brand-gray"
                   >
                     {a}
                   </div>
@@ -262,7 +229,7 @@ export default function PropertyDetail() {
               e.stopPropagation();
               prev();
             }}
-            className="absolute left-4 text-white text-3xl hover:text-gray-300"
+            className="absolute text-3xl text-white left-4 hover:text-gray-300"
           >
             ‹
           </button>
@@ -277,7 +244,7 @@ export default function PropertyDetail() {
               e.stopPropagation();
               next();
             }}
-            className="absolute right-4 text-white text-3xl hover:text-gray-300"
+            className="absolute text-3xl text-white right-4 hover:text-gray-300"
           >
             ›
           </button>
@@ -286,7 +253,7 @@ export default function PropertyDetail() {
               e.stopPropagation();
               closeLightbox();
             }}
-            className="absolute top-4 right-4 text-2xl text-white hover:text-gray-300"
+            className="absolute text-2xl text-white top-4 right-4 hover:text-gray-300"
           >
             ✕
           </button>
@@ -296,109 +263,44 @@ export default function PropertyDetail() {
   );
 }
 
-// 🏘️ UnitGroupCard with carousel support
-function UnitGroupCard({ group }) {
-  const { specifications, count, minPrice, photos = [], key } = group; // *** Destructure key ***
-  const [index, setIndex] = useState(0);
+// Unit row linking to Unit detail page
+function UnitRow({ unit }) {
   const {
-    bedrooms = 0,
-    bathrooms = 0,
-    floorArea = 0,
-    lotArea = 0,
-    parking = 0,
-  } = specifications || {};
-
-  let title = "Unit";
-  if (bedrooms > 0) {
-    title = `${bedrooms} Bedroom ${
-      bathrooms > 0 ? `/ ${bathrooms} Bathroom` : ""
-    }`;
-  } else if (floorArea > 0) {
-    title = `${floorArea} sqm Unit`;
-  } else if (lotArea > 0) {
-    title = `${lotArea} sqm Lot`;
-  }
-
-  const hasPhotos = photos && photos.length > 0;
-
+    unitNumber,
+    price,
+    status,
+    photos = [],
+    specifications = {},
+    _id,
+  } = unit;
+  const { bedrooms, bathrooms, floorArea } = specifications;
+  const cover =
+    photos?.[0] || "https://via.placeholder.com/640x360?text=No+Photo";
   return (
-    // *** MODIFIED: Add id={key} to this div ***
-    <div id={key} className="p-4 card space-y-3 scroll-mt-20">
-      {" "}
-      {/* Added scroll-mt-20 for header offset */}
-      <div className="flex items-center justify-between">
-        <div className="text-lg font-semibold text-brand-primary">{title}</div>
-        <span className="badge badge-green">{count} Available</span>
-      </div>
-      <div className="font-semibold text-brand-primary">
-        Starting from: ₱ {Number(minPrice || 0).toLocaleString()}
-      </div>
-      {/* 🖼️ Carousel for unit photos */}
-      {hasPhotos && (
-        <div className="relative w-full overflow-hidden rounded-lg h-56 bg-gray-100">
-          <img
-            src={photos[index]}
-            className="object-cover w-full h-full transition-all"
-            alt={`Unit photo ${index + 1}`}
-          />
-          {photos.length > 1 && (
-            <>
-              <button
-                onClick={() =>
-                  setIndex((index - 1 + photos.length) % photos.length)
-                }
-                className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 text-white rounded-full px-2 py-1 text-lg"
-              >
-                ‹
-              </button>
-              <button
-                onClick={() => setIndex((index + 1) % photos.length)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 text-white rounded-full px-2 py-1 text-lg"
-              >
-                ›
-              </button>
-              <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1">
-                {photos.map((_, i) => (
-                  <div
-                    key={i}
-                    className={`w-2 h-2 rounded-full ${
-                      i === index ? "bg-white" : "bg-white/40"
-                    }`}
-                  ></div>
-                ))}
-              </div>
-            </>
-          )}
+    <Link
+      to={`/unit/${_id}`}
+      className="flex gap-3 p-3 transition border rounded hover:bg-gray-50"
+    >
+      <img src={cover} className="object-cover w-24 h-24 rounded" alt="" />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between">
+          <div className="font-semibold truncate">
+            {unitNumber || "Unit"}
+          </div>
+          <div className="ml-2 font-semibold text-brand-primary">
+            ₱ {Number(price || 0).toLocaleString()}
+          </div>
         </div>
-      )}
-      <div className="grid gap-2 p-3 text-sm rounded bg-gray-50 md:grid-cols-3">
-        {lotArea > 0 && (
-          <div>
-            Lot Area: <strong>{lotArea} sqm</strong>
-          </div>
-        )}
-        {floorArea > 0 && (
-          <div>
-            Floor Area: <strong>{floorArea} sqm</strong>
-          </div>
-        )}
-        {bedrooms > 0 && (
-          <div>
-            Bedrooms: <strong>{bedrooms}</strong>
-          </div>
-        )}
-        {bathrooms > 0 && (
-          <div>
-            Bathrooms: <strong>{bathrooms}</strong>
-          </div>
-        )}
-        {parking > 0 && (
-          <div>
-            Parking: <strong>{parking}</strong>
-          </div>
-        )}
+        <div className="mt-1 text-xs tracking-wide uppercase">
+          {status}
+        </div>
+        <div className="mt-1 text-sm text-neutral-700">
+          {bedrooms ? `${bedrooms} Bed` : ""}
+          {bathrooms ? ` • ${bathrooms} Bath` : ""}
+          {floorArea ? ` • ${floorArea} sqm` : ""}
+        </div>
       </div>
-    </div>
+    </Link>
   );
 }
 

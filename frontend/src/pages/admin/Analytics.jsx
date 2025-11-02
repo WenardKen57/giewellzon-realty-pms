@@ -1,6 +1,7 @@
 import "./../../utils/registerCharts.js";
 import { useEffect, useState, useMemo } from "react";
 import { AnalyticsAPI } from "../../api/analytics";
+import { PropertiesAPI } from "../../api/properties";
 
 import { Bar, Pie } from "react-chartjs-2";
 
@@ -49,6 +50,15 @@ export default function Analytics() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
+  // Slicers
+  const [propertyId, setPropertyId] = useState("");
+  const [financingType, setFinancingType] = useState("");
+  const [source, setSource] = useState("");
+  const [agentName, setAgentName] = useState("");
+
+  // Properties list for selector
+  const [properties, setProperties] = useState([]);
+
   const [dash, setDash] = useState({});
   const [trend, setTrend] = useState([]);
   const [propPerf, setPropPerf] = useState([]);
@@ -56,6 +66,23 @@ export default function Analytics() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Load properties list for slicer (first page, larger limit)
+  useEffect(() => {
+    let active = true;
+    PropertiesAPI.list({ limit: 200 })
+      .then((res) => {
+        if (!active) return;
+        setProperties(res?.data || []);
+      })
+      .catch(() => {
+        if (!active) return;
+        setProperties([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -75,17 +102,26 @@ export default function Analytics() {
               period,
               status: trendStatus,
               dateField: trendDateField,
+              propertyId: propertyId || undefined,
+              financingType: financingType || undefined,
+              source: source || undefined,
+              agentName: agentName || undefined,
             }),
             AnalyticsAPI.propertyPerformance({
               ...(dateMode === "range"
                 ? { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, dateField: trendDateField }
                 : {}),
+              propertyId: propertyId || undefined,
             }),
             AnalyticsAPI.agentPerformance({
               status: "closed",
               ...(dateMode === "range"
                 ? { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, dateField: trendDateField }
                 : {}),
+              propertyId: propertyId || undefined,
+              financingType: financingType || undefined,
+              source: source || undefined,
+              agentName: agentName || undefined,
             }),
           ]);
 
@@ -291,6 +327,71 @@ export default function Analytics() {
     },
   };
 
+  // Top Properties (by revenue)
+  const topProps = useMemo(() => {
+    return [...(propPerf || [])]
+      .sort((a, b) => (b.totalClosedRevenue || 0) - (a.totalClosedRevenue || 0))
+      .slice(0, 5);
+  }, [propPerf]);
+
+  const topPropsBar = {
+    labels: topProps.map((p) => p.propertyName),
+    datasets: [
+      {
+        label: "Revenue (₱)",
+        data: topProps.map((p) => p.totalClosedRevenue || 0),
+        backgroundColor: "#10B981",
+      },
+      {
+        label: "Closed Sales",
+        data: topProps.map((p) => p.totalClosedSales || 0),
+        backgroundColor: "#4F46E5",
+        yAxisID: "y2",
+      },
+    ],
+  };
+  const topPropsOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: { beginAtZero: true, ticks: { callback: (v) => `₱${(v / 1_000_000).toFixed(1)}M` } },
+      y2: { beginAtZero: true, position: "right", grid: { drawOnChartArea: false } },
+    },
+    plugins: { legend: { position: "bottom" } },
+  };
+
+  // Agent performance chart (top 5)
+  const topAgents = useMemo(() => {
+    return [...(agentPerf || [])]
+      .sort((a, b) => (b.totalRevenue || 0) - (a.totalRevenue || 0))
+      .slice(0, 5);
+  }, [agentPerf]);
+  const agentBar = {
+    labels: topAgents.map((a) => a.agentName),
+    datasets: [
+      {
+        label: "Revenue (₱)",
+        data: topAgents.map((a) => a.totalRevenue || 0),
+        backgroundColor: "#8B5CF6",
+      },
+      {
+        label: "Closed Sales",
+        data: topAgents.map((a) => a.totalSales || 0),
+        backgroundColor: "#F59E0B",
+        yAxisID: "y2",
+      },
+    ],
+  };
+  const agentBarOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: { beginAtZero: true, ticks: { callback: (v) => `₱${(v / 1_000_000).toFixed(1)}M` } },
+      y2: { beginAtZero: true, position: "right", grid: { drawOnChartArea: false } },
+    },
+    plugins: { legend: { position: "bottom" } },
+  };
+
   return (
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-semibold text-gray-800">
@@ -300,7 +401,7 @@ export default function Analytics() {
       {/* Filters */}
       <div className="p-4 bg-white border rounded-lg shadow-sm">
         <div className="text-lg font-medium text-gray-700 mb-3">
-          Sales Trend Filters
+          Slicers
         </div>
         <div className="flex flex-wrap gap-4 items-center">
           <label className="flex items-center gap-2">
@@ -391,6 +492,62 @@ export default function Analytics() {
               <option value="saleDate">Sale Date</option>
             </select>
           </label>
+          <label className="flex items-center gap-2">
+            <span className="text-sm font-medium">Property:</span>
+            <select
+              className="input w-56"
+              value={propertyId}
+              onChange={(e) => setPropertyId(e.target.value)}
+              disabled={loading}
+            >
+              <option value="">All</option>
+              {properties.map((p) => (
+                <option key={p._id} value={p._id}>
+                  {p.propertyName} {p.city ? `- ${p.city}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2">
+            <span className="text-sm font-medium">Financing:</span>
+            <select
+              className="input w-40"
+              value={financingType}
+              onChange={(e) => setFinancingType(e.target.value)}
+              disabled={loading}
+            >
+              <option value="">All</option>
+              <option value="cash">Cash</option>
+              <option value="in_house">In-House</option>
+              <option value="pag_ibig">Pag-IBIG</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-2">
+            <span className="text-sm font-medium">Source:</span>
+            <select
+              className="input w-44"
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
+              disabled={loading}
+            >
+              <option value="">All</option>
+              <option value="website">Website</option>
+              <option value="referral">Referral</option>
+              <option value="walk_in">Walk-in</option>
+              <option value="advertisement">Advertisement</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-2">
+            <span className="text-sm font-medium">Agent:</span>
+            <input
+              type="text"
+              className="input w-44"
+              placeholder="Agent name..."
+              value={agentName}
+              onChange={(e) => setAgentName(e.target.value)}
+              disabled={loading}
+            />
+          </label>
           {loading && <span className="text-sm text-gray-500">Loading...</span>}
         </div>
       </div>
@@ -420,7 +577,7 @@ export default function Analytics() {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card title={`Monthly Sales Performance (${year} - ${trendStatus})`}>
+        <Card title={`${period === "quarterly" ? "Quarterly" : "Monthly"} Sales Performance (${dateMode === "year" ? year : `${dateFrom || "?"} → ${dateTo || "?"}`})`}>
           {loading ? (
             <ChartPlaceholder />
           ) : (
@@ -436,6 +593,28 @@ export default function Analytics() {
           ) : (
             <div className="h-[350px]">
               <Pie data={pieData} options={pieOptions} />
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* Additional Visualizations */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card title="Top Properties by Revenue (Top 5)">
+          {loading ? (
+            <ChartPlaceholder />
+          ) : (
+            <div className="h-[320px]">
+              <Bar data={topPropsBar} options={topPropsOptions} />
+            </div>
+          )}
+        </Card>
+        <Card title="Top Agents by Revenue (Top 5)">
+          {loading ? (
+            <ChartPlaceholder />
+          ) : (
+            <div className="h-[320px]">
+              <Bar data={agentBar} options={agentBarOptions} />
             </div>
           )}
         </Card>
