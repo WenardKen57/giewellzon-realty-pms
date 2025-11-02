@@ -73,7 +73,7 @@ function AdminSidebar({
     { to: "/admin/properties", label: "Properties", icon: Building },
     { to: "/admin/sales", label: "Sales", icon: Briefcase },
     { to: "/admin/inquiries", label: "Inquiries", icon: MessageSquare },
-    { to: "/admin/reports", label: "Reports", icon: BarChart3 },
+    { to: "/admin/reports", label: "Reports & Analytics", icon: BarChart3 },
     { to: "/admin/profile", label: "Profile", icon: User },
   ];
 
