@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { SalesAPI } from "../../api/sales";
 import { SaleFormModal, SaleViewModal } from "./SalesModals";
 import { toast } from "react-toastify";
+import { X } from "lucide-react"; // Import X for the new modal
 
 // Helper to format currency
 const formatCurrency = (value) =>
@@ -40,6 +41,11 @@ export default function SalesManagement() {
   });
   const [loading, setLoading] = useState(true);
 
+  // --- NEW: State for delete confirmation modal ---
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [saleToDelete, setSaleToDelete] = useState(null); // Stores the full sale object
+  const [deleting, setDeleting] = useState(false); // Specific loading state for delete
+
   // load accepts an optional overrideFilters object.
   // If provided, it will be used for the API call instead of the component state.
   async function load(overrideFilters) {
@@ -67,23 +73,35 @@ export default function SalesManagement() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handleDelete(saleId, propertyName, unitNumber) {
-    if (
-      confirm(
-        `Are you sure you want to delete the sale for ${propertyName} ${
-          unitNumber || ""
-        }? This will mark the unit as available again.`
-      )
-    ) {
-      try {
-        await SalesAPI.del(saleId);
-        toast.success("Sale record deleted successfully!");
-        load(); // Reload the list
-      } catch (err) {
-        toast.error("Failed to delete sale record.");
-        console.error("Delete Sale Error:", err);
-      }
+  // --- UPDATED: This function now just OPENS the modal ---
+  async function handleDelete(sale) {
+    setSaleToDelete(sale);
+    setIsConfirmModalOpen(true);
+  }
+
+  // --- NEW: This function handles the actual deletion ---
+  async function confirmDeleteSale() {
+    if (!saleToDelete) return;
+
+    setDeleting(true);
+    try {
+      await SalesAPI.del(saleToDelete._id);
+      toast.success("Sale record deleted successfully!");
+      load(); // Reload the list
+    } catch (err) {
+      toast.error("Failed to delete sale record.");
+      console.error("Delete Sale Error:", err);
+    } finally {
+      setDeleting(false);
+      setIsConfirmModalOpen(false);
+      setSaleToDelete(null);
     }
+  }
+
+  // --- NEW: This function handles cancellation ---
+  function cancelDeleteSale() {
+    setIsConfirmModalOpen(false);
+    setSaleToDelete(null);
   }
 
   // Clear filters and immediately reload the list (no extra Apply click needed)
@@ -222,7 +240,9 @@ export default function SalesManagement() {
           <thead className="text-xs text-gray-700 uppercase bg-gray-50">
             <tr>
               <th scope="col" className="px-6 py-3">Property</th>
+              {/* --- THIS IS THE FIX --- */}
               <th scope="col" className="px-6 py-3">Unit</th>
+              {/* ----------------------- */}
               <th scope="col" className="px-6 py-3">Buyer</th>
               <th scope="col" className="px-6 py-3">Sale Date</th>
               <th scope="col" className="px-6 py-3">Closing Date</th>
@@ -276,13 +296,7 @@ export default function SalesManagement() {
                     <button
                       title="Delete"
                       className="text-sm font-medium text-red-600 hover:underline"
-                      onClick={() =>
-                        handleDelete(
-                          r._id,
-                          r.propertyName,
-                          r.unitNumber || r.unitId?.unitNumber
-                        )
-                      }
+                      onClick={() => handleDelete(r) }
                     >
                       Delete
                     </button>
@@ -320,6 +334,15 @@ export default function SalesManagement() {
           setViewing(null);
         }}
         data={viewing}
+      />
+
+      {/* --- NEW MODAL RENDER --- */}
+      <ConfirmDeleteModal
+        open={isConfirmModalOpen}
+        onClose={cancelDeleteSale}
+        onConfirm={confirmDeleteSale}
+        sale={saleToDelete}
+        isLoading={deleting}
       />
     </div>
   );
@@ -428,5 +451,97 @@ function IconTrendingUp({ className = "w-6 h-6 text-white" }) {
       <path d="M3 17l6-6 4 4 8-8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
       <path d="M14 7h6v6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
+  );
+}
+
+// --- NEW: IconTrash ---
+function IconTrash({ className = "w-6 h-6" }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M3 6h18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+// --- NEW: Custom Confirmation Modal Component for Deleting Sales ---
+function ConfirmDeleteModal({ open, onClose, onConfirm, sale, isLoading }) {
+  if (!open) return null;
+
+  const saleName = `sale for ${sale.propertyName} ${sale.unitNumber || sale.unitId?.unitNumber || ""}`;
+
+  return (
+    // Use z-index 60 to appear on top of other modals (which are z-50)
+    <div className="fixed inset-0 z-[60] grid p-4 overflow-y-auto bg-black/60 place-items-center">
+      <div
+        className="w-full max-w-md p-6 bg-white rounded-xl shadow-2xl ring-1 ring-black/5"
+        aria-modal="true"
+        role="dialog"
+      >
+        <header className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-red-100 text-red-600 shadow">
+              <IconTrash className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800">
+                Confirm Sale Deletion
+              </h2>
+              <p className="text-sm text-gray-500 mt-0.5">
+                Are you absolutely sure?
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center justify-center w-9 h-9 rounded-md text-gray-600 hover:bg-gray-100 transition"
+            aria-label="Close"
+            disabled={isLoading}
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </header>
+
+        <div className="mt-4 text-sm text-gray-700 space-y-3">
+          <p>
+            You are about to delete the:
+            <strong className="block text-base text-gray-900 my-1">{saleName}</strong>
+          </p>
+          <p className="p-3 text-sm font-medium text-red-800 bg-red-50 border border-red-200 rounded-lg">
+            <strong>Warning:</strong> This will mark the associated unit as "available" again. This action cannot be undone.
+          </p>
+        </div>
+
+        <div className="flex justify-end gap-3 pt-6 border-t mt-6">
+          <button
+            type="button"
+            className="px-3 py-2 rounded-md text-sm font-medium bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100 transition"
+            onClick={onClose}
+            disabled={isLoading}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-white font-semibold shadow-md transition bg-red-600 hover:bg-red-700 disabled:opacity-60"
+            onClick={onConfirm}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                  <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" strokeLinecap="round" className="opacity-75" />
+                </svg>
+                Deleting...
+              </>
+            ) : (
+              "Confirm Delete"
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
