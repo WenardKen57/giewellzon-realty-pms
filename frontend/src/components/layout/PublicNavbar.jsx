@@ -1,4 +1,5 @@
 import { NavLink, Link, useLocation } from "react-router-dom";
+import clientLogo from "../../assets/client-logo.jpeg"; // ✅ adjust path if needed
 
 export default function PublicNavbar() {
   const loc = useLocation();
@@ -22,12 +23,19 @@ export default function PublicNavbar() {
   return (
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm shadow-sm transition-all duration-300 ease-in-out">
       <div className="flex items-center justify-between h-16 max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">
-        <Link
-          to="/"
-          className="text-xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-green-800"
-        >
-          GIEWELLZON
+        {/* --- CHANGED: gap-2 to gap-3 --- */}
+        <Link to="/" className="flex items-center gap-3">
+          {/* --- CHANGED: h-10, w-auto, rounded-sm to h-8, w-8, rounded-full, object-cover --- */}
+          <img
+            src={clientLogo}
+            alt="Client Logo"
+            className="h-8 w-8 rounded-full object-cover"
+          />
+          <span className="text-xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-green-800">
+            GIEWELLZON
+          </span>
         </Link>
+
         <nav className="hidden md:flex items-center gap-2 text-sm">
           <NavLink to="/" className={navLinkClasses}>
             Home
