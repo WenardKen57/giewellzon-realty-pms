@@ -12,7 +12,30 @@ export default function Home() {
       try {
   const res = await PropertiesAPI.getFeaturedProperties();
   // API returns { data: [...] }
-  setFeatured(res.data || res);
+  const list = res.data || res || [];
+
+  // Fetch unit stats for each featured property (min price and available count)
+  const enriched = await Promise.all(
+    list.map(async (p) => {
+      try {
+        const units = await PropertiesAPI.listUnits(p._id);
+        const available = (units || []).filter((u) => u.status === "available");
+        const minPrice =
+          available.length > 0
+            ? Math.min(
+                ...available
+                  .map((u) => Number(u.price))
+                  .filter((n) => Number.isFinite(n))
+              )
+            : null;
+        return { ...p, availableUnits: available.length, minPrice };
+      } catch {
+        // If unit fetch fails, keep original property data
+        return { ...p };
+      }
+    })
+  );
+  setFeatured(enriched);
       } catch (err) {
         console.error("Failed to load featured properties:", err);
       } finally {
@@ -71,12 +94,12 @@ export default function Home() {
             No featured properties at the moment.
           </p>
         ) : (
-          <div className="grid gap-6 md:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-3 items-stretch">
             {featured.map((p) => (
               <Link
                 key={p._id}
                 to={`/properties/${p._id}`}
-                className="block overflow-hidden transition-all duration-300 bg-white border group rounded-xl hover:shadow-xl"
+                className="flex h-full flex-col overflow-hidden transition-all duration-300 bg-white border group rounded-xl hover:shadow-xl"
               >
                 <div className="relative">
                   <img
@@ -96,7 +119,7 @@ export default function Home() {
                     )}
                   </div>
                 </div>
-                <div className="p-4">
+                <div className="p-4 flex-1 flex flex-col">
                   <h3 className="mb-1 text-lg font-semibold text-brand-primary">
                     {p.propertyName}
                   </h3>
@@ -116,7 +139,7 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <div className="mt-4">
+                  <div className="mt-auto pt-4">
                     <span className="inline-block w-full text-center btn btn-secondary">
                       View details
                     </span>
