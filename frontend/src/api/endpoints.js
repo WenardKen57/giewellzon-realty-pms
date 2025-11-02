@@ -40,6 +40,7 @@ export const endpoints = {
     root: `${API_BASE}/units`, // Your NEW main search endpoint (GET)
     byId: (id) => `${API_BASE}/units/${id}`, // GET, PATCH, DELETE one unit
     uploadPhotos: (id) => `${API_BASE}/units/${id}/upload-photos`,
+    photo: (id) => `${API_BASE}/units/${id}/photo`,
   },
 
   sales: {

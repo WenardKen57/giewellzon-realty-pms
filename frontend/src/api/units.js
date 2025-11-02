@@ -34,4 +34,10 @@ export const UnitsAPI = {
     for (const f of files) fd.append("photos", f);
     return api.post(endpoints.units.uploadPhotos(id), fd).then((r) => r.data);
   },
+
+  deletePhoto: (id, photoUrl) => {
+    return api
+      .delete(endpoints.units.photo(id), { data: { photoUrl } }) // Send URL in body
+      .then((r) => r.data);
+  },
 };

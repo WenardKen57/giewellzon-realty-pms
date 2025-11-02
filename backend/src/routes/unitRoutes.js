@@ -36,4 +36,11 @@ router.post(
   unitCtrl.uploadUnitPhotos // Uploads photos for the UNIT
 );
 
+// --- NEW ---
+router.delete(
+  "/:id/photo",
+  requireAuth,
+  unitCtrl.deleteUnitPhoto // Deletes one photo
+);
+
 module.exports = router;

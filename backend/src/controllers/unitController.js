@@ -155,12 +155,13 @@ async function deleteUnit(req, res, next) {
 // --- UNIT MEDIA UPLOADS ---
 
 // Upload photos for a specific Unit
+// --- UPDATED: This now APPENDS photos instead of replacing ---
 async function uploadUnitPhotos(req, res, next) {
   try {
     if (!req.files || !req.files.length)
       return res.status(400).json({ message: "No files provided" }); // Clearer message
 
-    // Find the unit first to append photos if needed, or replace
+    // Find the unit first to append photos
     const unit = await Unit.findById(req.params.id);
     if (!unit) return res.status(404).json({ message: "Unit not found" });
 
@@ -169,17 +170,33 @@ async function uploadUnitPhotos(req, res, next) {
     );
     const newUrls = uploads.map((u) => u.secure_url);
 
-    // Decide whether to append or replace based on your needs
-    // Example: Replace all photos
-    unit.photos = newUrls;
-    // Example: Append new photos to existing ones
-    // unit.photos = [...unit.photos, ...newUrls];
+    // --- MODIFIED: Append new photos to existing ones ---
+    unit.photos = [...(unit.photos || []), ...newUrls];
 
     const updatedDoc = await unit.save(); // Save the unit instance
 
     res.json(updatedDoc);
   } catch (e) {
     console.error("Error uploading unit photos:", e); // Log full error
+    next(e);
+  }
+}
+
+// --- NEW: Delete a specific Photo from a Unit ---
+async function deleteUnitPhoto(req, res, next) {
+  try {
+    const { photoUrl } = req.body; // Get the URL from the request body
+    if (!photoUrl) {
+      return res.status(400).json({ message: "No photoUrl provided" });
+    }
+    const doc = await Unit.findByIdAndUpdate(
+      req.params.id,
+      { $pull: { photos: photoUrl } }, // Remove the specific URL from the photos array
+      { new: true }
+    );
+    if (!doc) return res.status(404).json({ message: "Unit not found" });
+    res.json({ message: "Photo removed", doc });
+  } catch (e) {
     next(e);
   }
 }
@@ -318,4 +335,5 @@ module.exports = {
   deleteUnit,
   uploadUnitPhotos,
   listUnits, // This is the main search endpoint
+  deleteUnitPhoto, // --- NEW EXPORT ---
 };
