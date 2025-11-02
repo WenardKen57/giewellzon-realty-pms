@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import { SalesAPI } from "../../api/sales";
 import { PropertiesAPI } from "../../api/properties";
+import { Save, X } from "lucide-react"; // Import icons
 
 // --- Helper: Format date for input type="date" ---
 function formatDateForInput(dateStr) {
@@ -48,12 +49,27 @@ const BLANK_FORM = {
   source: "",
 };
 
+// --- NEW: Helper component for form fields with errors ---
+function FormField({ label, children, error }) {
+  return (
+    <div className="space-y-2">
+      <label className="block text-sm font-medium text-gray-600">{label}</label>
+      {children}
+      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+    </div>
+  );
+}
+
 export function SaleFormModal({ open, onClose, editing }) {
   const [properties, setProperties] = useState([]);
   const [units, setUnits] = useState([]);
   const [loadingUnits, setLoadingUnits] = useState(false);
   const [form, setForm] = useState(BLANK_FORM);
   const [loading, setLoading] = useState(false);
+  
+  // --- NEW: State for validation errors and confirm modal ---
+  const [errors, setErrors] = useState({});
+  const [isUpdateConfirmOpen, setIsUpdateConfirmOpen] = useState(false);
 
   // Fetch properties
   useEffect(() => {
@@ -96,6 +112,7 @@ export function SaleFormModal({ open, onClose, editing }) {
   // Populate form
   useEffect(() => {
     if (open) {
+      setErrors({}); // Clear errors when modal opens
       if (editing) {
         setForm({
           propertyId: editing.propertyId || "",
@@ -123,36 +140,66 @@ export function SaleFormModal({ open, onClose, editing }) {
 
   if (!open) return null;
 
-  async function submit(e) {
-    e.preventDefault();
-  
-    if (!form.unitId) {
-      toast.error("Please select a Unit.");
-      return;
+  // --- NEW: Validation function ---
+  function validate() {
+    const newErrors = {};
+    if (!form.propertyId) {
+      newErrors.propertyId = "Please select a property.";
     }
-    if (!form.buyerName) {
-      toast.error("Please enter Buyer Name.");
-      return;
+    if (!form.unitId) {
+      newErrors.unitId = "Please select a unit.";
+    }
+    if (!form.buyerName.trim()) {
+      newErrors.buyerName = "Buyer name is required.";
     }
     if (
       !form.salePrice ||
       isNaN(Number(form.salePrice)) ||
       Number(form.salePrice) <= 0
     ) {
-      toast.error("Please enter a valid Sale Price.");
-      return;
+      newErrors.salePrice = "Please enter a valid, positive sale price.";
     }
     if (!form.saleDate) {
-      toast.error("Please enter a Sale Date.");
-      return;
+      newErrors.saleDate = "Sale date is required.";
     }
-  
-    // ✅ Prevent invalid date sequence
     if (form.closingDate && form.saleDate && form.closingDate < form.saleDate) {
-      toast.error("Closing date cannot be earlier than sale date.");
+      newErrors.closingDate = "Closing date cannot be earlier than sale date.";
+    }
+    // Simple phone validation (optional)
+    const phPattern = /^(09\d{9}|\+639\d{9})$/;
+    if (form.buyerPhone && !phPattern.test(form.buyerPhone)) {
+       newErrors.buyerPhone = "Invalid PH mobile (e.g., 09123456789).";
+    }
+    if (form.agentPhone && !phPattern.test(form.agentPhone)) {
+       newErrors.agentPhone = "Invalid PH mobile (e.g., 09123456789).";
+    }
+    return newErrors;
+  }
+
+  // --- UPDATED: This is the form's submit handler ---
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setErrors({}); // Clear old errors
+
+    const newErrors = validate();
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      toast.error("Please fix the errors highlighted on the form.");
       return;
     }
-  
+
+    if (editing) {
+      // If editing, open confirmation modal
+      setIsUpdateConfirmOpen(true);
+    } else {
+      // If creating new, save immediately
+      await handleConfirmSave();
+    }
+  }
+
+  // --- NEW: This function contains the actual save logic ---
+  async function handleConfirmSave() {
+    setIsUpdateConfirmOpen(false); // Close modal
     setLoading(true);
     try {
       const payload = {
@@ -182,12 +229,15 @@ export function SaleFormModal({ open, onClose, editing }) {
     } finally {
       setLoading(false);
     }
-  }  
+  }
+
+  // Helper to get error class
+  const errorClass = (field) => errors[field] ? "border-red-500 focus:ring-red-200" : "border-gray-200 focus:ring-emerald-200";
 
   return (
     <div className="fixed inset-0 z-50 grid p-4 overflow-y-auto bg-black/60 place-items-center">
       <form
-        onSubmit={submit}
+        onSubmit={handleSubmit} // --- UPDATED ---
         className="w-full max-w-2xl p-6 my-8 space-y-6 bg-white rounded-xl shadow-2xl ring-1 ring-black/5"
         aria-modal="true"
         role="dialog"
@@ -216,21 +266,18 @@ export function SaleFormModal({ open, onClose, editing }) {
               className="inline-flex items-center justify-center w-9 h-9 rounded-md text-gray-600 hover:bg-gray-100 transition"
               aria-label="Close"
             >
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" aria-hidden>
-                <path d="M6 6l12 12M6 18L18 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+              <X className="w-5 h-5" />
             </button>
           </div>
         </header>
 
         {/* Property & Unit */}
         <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-600">Property (Building) *</label>
+          <FormField label="Property (Building) *" error={errors.propertyId}>
             <select
               id="propertyId"
               required
-              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              className={`w-full rounded-md border px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 ${errorClass("propertyId")}`}
               value={form.propertyId}
               onChange={(e) =>
                 setForm((s) => ({
@@ -248,15 +295,14 @@ export function SaleFormModal({ open, onClose, editing }) {
                 </option>
               ))}
             </select>
-          </div>
+          </FormField>
 
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-600">Unit *</label>
+          <FormField label="Unit *" error={errors.unitId}>
             <div className="relative">
               <select
                 id="unitId"
                 required
-                className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                className={`w-full rounded-md border px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 ${errorClass("unitId")}`}
                 value={form.unitId}
                 onChange={(e) =>
                   setForm((s) => ({ ...s, unitId: e.target.value }))
@@ -285,91 +331,83 @@ export function SaleFormModal({ open, onClose, editing }) {
                 </div>
               )}
             </div>
-          </div>
+          </FormField>
         </section>
 
         {/* Buyer Information */}
         <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <label className="block text-sm font-medium text-gray-600">Buyer Name *</label>
+          <FormField label="Buyer Name *" error={errors.buyerName}>
             <input
-              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              className={`w-full rounded-md border px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 ${errorClass("buyerName")}`}
               value={form.buyerName}
               onChange={(e) => setForm((s) => ({ ...s, buyerName: e.target.value }))}
               required
             />
-          </div>
+          </FormField>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-600">Buyer Email</label>
+          <FormField label="Buyer Email" error={errors.buyerEmail}>
             <input
               type="email"
-              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              className={`w-full rounded-md border px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 ${errorClass("buyerEmail")}`}
               value={form.buyerEmail}
               onChange={(e) => setForm((s) => ({ ...s, buyerEmail: e.target.value }))}
             />
-          </div>
+          </FormField>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-600">Buyer Phone</label>
+          <FormField label="Buyer Phone" error={errors.buyerPhone}>
             <input
-              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              className={`w-full rounded-md border px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 ${errorClass("buyerPhone")}`}
               value={form.buyerPhone}
               onChange={(e) => setForm((s) => ({ ...s, buyerPhone: e.target.value }))}
             />
-          </div>
+          </FormField>
         </section>
 
         {/* Sale Details */}
         <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <label className="block text-sm font-medium text-gray-600">Sale Price *</label>
+          <FormField label="Sale Price *" error={errors.salePrice}>
             <input
               type="number"
               step="0.01"
-              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              className={`w-full rounded-md border px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 ${errorClass("salePrice")}`}
               value={form.salePrice}
               onChange={(e) => setForm((s) => ({ ...s, salePrice: e.target.value }))}
               required
             />
-          </div>
+          </FormField>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-600">Commission Rate (%)</label>
+          <FormField label="Commission Rate (%)" error={errors.commissionRate}>
             <input
               type="number"
               step="0.01"
-              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              className={`w-full rounded-md border px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 ${errorClass("commissionRate")}`}
               value={form.commissionRate}
               onChange={(e) => setForm((s) => ({ ...s, commissionRate: e.target.value }))}
             />
-          </div>
+          </FormField>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-600">Sale Date *</label>
+          <FormField label="Sale Date *" error={errors.saleDate}>
             <input
               type="date"
-              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              className={`w-full rounded-md border px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 ${errorClass("saleDate")}`}
               value={form.saleDate}
               onChange={(e) => setForm((s) => ({ ...s, saleDate: e.target.value }))}
               required
             />
-          </div>
+          </FormField>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-600">Closing Date</label>
+          <FormField label="Closing Date" error={errors.closingDate}>
             <input
               type="date"
-              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              className={`w-full rounded-md border px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 ${errorClass("closingDate")}`}
               value={form.closingDate}
               onChange={(e) => setForm((s) => ({ ...s, closingDate: e.target.value }))}
             />
-          </div>
+          </FormField>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-600">Status</label>
+          <FormField label="Status" error={errors.status}>
             <select
-              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              className={`w-full rounded-md border px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 ${errorClass("status")}`}
               value={form.status}
               onChange={(e) => setForm((s) => ({ ...s, status: e.target.value }))}
             >
@@ -377,12 +415,11 @@ export function SaleFormModal({ open, onClose, editing }) {
               <option value="closed">Closed</option>
               <option value="cancelled">Cancelled</option>
             </select>
-          </div>
+          </FormField>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-600">Financing Type</label>
+          <FormField label="Financing Type" error={errors.financingType}>
             <select
-              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              className={`w-full rounded-md border px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 ${errorClass("financingType")}`}
               value={form.financingType}
               onChange={(e) => setForm((s) => ({ ...s, financingType: e.target.value }))}
             >
@@ -390,12 +427,11 @@ export function SaleFormModal({ open, onClose, editing }) {
               <option value="pag_ibig">Pag-IBIG</option>
               <option value="in_house">In-house</option>
             </select>
-          </div>
+          </FormField>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-600">Lead Source</label>
+          <FormField label="Lead Source" error={errors.source}>
             <select
-              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              className={`w-full rounded-md border px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 ${errorClass("source")}`}
               value={form.source}
               onChange={(e) => setForm((s) => ({ ...s, source: e.target.value }))}
             >
@@ -405,50 +441,46 @@ export function SaleFormModal({ open, onClose, editing }) {
               <option value="walk_in">Walk-in</option>
               <option value="advertisement">Advertisement</option>
             </select>
-          </div>
+          </FormField>
         </section>
 
         {/* Agent Info */}
         <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <label className="block text-sm font-medium text-gray-600">Agent Name</label>
+          <FormField label="Agent Name" error={errors.agentName}>
             <input
-              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              className={`w-full rounded-md border px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 ${errorClass("agentName")}`}
               value={form.agentName}
               onChange={(e) => setForm((s) => ({ ...s, agentName: e.target.value }))}
             />
-          </div>
+          </FormField>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-600">Agent Email</label>
+          <FormField label="Agent Email" error={errors.agentEmail}>
             <input
               type="email"
-              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              className={`w-full rounded-md border px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 ${errorClass("agentEmail")}`}
               value={form.agentEmail}
               onChange={(e) => setForm((s) => ({ ...s, agentEmail: e.target.value }))}
             />
-          </div>
+          </FormField>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-600">Agent Phone</label>
+          <FormField label="Agent Phone" error={errors.agentPhone}>
             <input
-              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              className={`w-full rounded-md border px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 ${errorClass("agentPhone")}`}
               value={form.agentPhone}
               onChange={(e) => setForm((s) => ({ ...s, agentPhone: e.target.value }))}
             />
-          </div>
+          </FormField>
         </section>
 
         {/* Notes */}
-        <div>
-          <label className="block text-sm font-medium text-gray-600">Notes</label>
+        <FormField label="Notes" error={errors.notes}>
           <textarea
             className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 min-h-[80px]"
             rows="3"
             value={form.notes}
             onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))}
           />
-        </div>
+        </FormField>
 
         {/* Buttons */}
         <div className="flex items-center justify-end gap-3 pt-4 border-t">
@@ -478,6 +510,14 @@ export function SaleFormModal({ open, onClose, editing }) {
           </button>
         </div>
       </form>
+
+      {/* --- NEW: Add the confirmation modal call --- */}
+      <ConfirmUpdateModal
+        open={isUpdateConfirmOpen}
+        onClose={() => setIsUpdateConfirmOpen(false)}
+        onConfirm={handleConfirmSave}
+        isLoading={loading}
+      />
     </div>
   );
 }
@@ -498,9 +538,7 @@ export function SaleViewModal({ open, onClose, data }) {
             onClick={() => onClose(false)}
             aria-label="Close"
           >
-            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path d="M6 6l12 12M6 18L18 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <X className="w-5 h-5" />
           </button>
         </header>
 
@@ -554,6 +592,84 @@ function Read({ label, value, isTextArea = false }) {
           {displayValue}
         </div>
       )}
+    </div>
+  );
+}
+
+// --- NEW: Custom Confirmation Modal Component for Updating ---
+function ConfirmUpdateModal({ open, onClose, onConfirm, isLoading }) {
+  if (!open) return null;
+
+  return (
+    // Use z-[60] to appear on top of the first modal (which is z-50)
+    <div className="fixed inset-0 z-[60] grid p-4 overflow-y-auto bg-black/60 place-items-center">
+      <div
+        className="w-full max-w-md p-6 bg-white rounded-xl shadow-2xl ring-1 ring-black/5"
+        aria-modal="true"
+        role="dialog"
+      >
+        <header className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-blue-100 text-blue-600 shadow">
+              <Save className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800">
+                Confirm Update
+              </h2>
+              <p className="text-sm text-gray-500 mt-0.5">
+                Are you sure?
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center justify-center w-9 h-9 rounded-md text-gray-600 hover:bg-gray-100 transition"
+            aria-label="Close"
+            disabled={isLoading}
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </header>
+
+        <div className="mt-4 text-sm text-gray-700 space-y-3">
+          <p>
+            You are about to save changes to this sale record.
+          </p>
+          <p>Please confirm you want to apply these updates.</p>
+        </div>
+
+        <div className="flex justify-end gap-3 pt-6 border-t mt-6">
+          <button
+            type="button"
+            className="px-3 py-2 rounded-md text-sm font-medium bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100 transition"
+            onClick={onClose}
+            disabled={isLoading}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-white font-semibold shadow-md transition"
+            style={{ background: "linear-gradient(90deg,#10B981 0%,#047857 100%)" }} // Green button
+            onClick={onConfirm}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                  <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" strokeLinecap="round" className="opacity-75" />
+                </svg>
+                Saving...
+              </>
+            ) : (
+              "Confirm Update"
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
