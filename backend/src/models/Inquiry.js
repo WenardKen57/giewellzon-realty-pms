@@ -10,7 +10,7 @@ const InquirySchema = new mongoose.Schema(
 
     inquiryType: {
       type: String,
-      enum: ["general", "pricing", "viewing", "financing", "others"],
+      enum: ["general", "pricing", "schedule viewing", "financing", "others"],
       default: "general",
       index: true,
     },
