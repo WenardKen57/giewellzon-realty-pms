@@ -89,7 +89,7 @@ export default function Properties() {
     // Note: The 'load' function is triggered by the 'Apply' button,
     // so clearing filters just resets state. We'll add a 'load' call here
     // to make "Clear Filters" also re-fetch the unfiltered list.
-    load(); 
+    load();
   }
 
   useEffect(() => {
@@ -177,9 +177,9 @@ export default function Properties() {
             ))}
           </FilterSelect>
 
-          {/* [EDIT] Enhanced Buttons */}
+          {/* [EDIT] Updated Buttons */}
           <button
-            className="w-full btn bg-gradient-to-br from-green-500 to-green-700 text-white hover:from-green-600 hover:to-green-800"
+            className="w-full btn btn-primary"
             onClick={load}
           >
             Apply Filters
@@ -195,10 +195,8 @@ export default function Properties() {
             Showing {properties.length} properties
           </div>
 
-          {/* [EDIT] Enhanced grid responsiveness */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {properties.length === 0 && (
-              // [EDIT] Enhanced "No properties" message
               <div className="sm:col-span-2 lg:col-span-3 text-center text-gray-500 py-16">
                 <Building className="w-12 h-12 mx-auto text-gray-400" />
                 <h3 className="mt-2 text-lg font-semibold">No properties found</h3>
@@ -218,7 +216,7 @@ export default function Properties() {
   );
 }
 
-// [EDIT] Enhanced Property Card
+// Property card for public listing
 function PropertyCard({ property }) {
   const cover =
     property.thumbnail ||
