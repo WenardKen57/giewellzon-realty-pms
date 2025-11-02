@@ -1,9 +1,18 @@
-import { useLocation } from "react-router-dom";
+Footer
+
+import { useLocation, useNavigate } from "react-router-dom";
 
 export default function Footer() {
   const loc = useLocation();
+  const navigate = useNavigate(); // 1. Initialize the navigate hook
+
   // Hide footer on all admin pages
   if (loc.pathname.startsWith("/admin")) return null;
+
+  // 2. Create the click handler
+  const handleNavigateToContact = () => {
+    navigate("/contact");
+  };
 
   return (
     <footer className=" bg-brand-primary text-brand-white">
@@ -49,7 +58,11 @@ export default function Footer() {
         </div>
         <div>
           <div className="mb-2 font-semibold text-white">Get in Touch</div>
-          <button className="text-white border-white btn btn-outline hover:bg-white hover:text-brand-primary">
+          {/* 3. Attach the handler to the button */}
+          <button
+            onClick={handleNavigateToContact}
+            className="text-white border-white btn btn-outline hover:bg-white hover:text-brand-primary"
+          >
             Click Here
           </button>
           <div className="mt-3 text-xs opacity-75">
