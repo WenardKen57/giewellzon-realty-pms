@@ -73,7 +73,9 @@ export function SaleFormModal({ open, onClose, editing }) {
       setLoadingUnits(true);
       PropertiesAPI.listUnits(propertyId)
         .then((r) => {
-          const unitList = r.data || [];
+          // Backend returns a plain array for this endpoint (res.json(data))
+          // but support both shapes just in case ({ data: [...] } or [...])
+          const unitList = Array.isArray(r) ? r : r?.data || [];
           // Filter units for the dropdown
           const selectableUnits = editing
             ? unitList // Show all when editing (including the current one)
@@ -184,7 +186,7 @@ export function SaleFormModal({ open, onClose, editing }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid p-4 bg-black/60 place-items-center overflow-y-auto">
+    <div className="fixed inset-0 z-50 grid p-4 overflow-y-auto bg-black/60 place-items-center">
       {" "}
       {/* Darker overlay */}
       <form
@@ -193,12 +195,12 @@ export function SaleFormModal({ open, onClose, editing }) {
       >
         {" "}
         {/* Wider modal, more spacing */}
-        <h2 className="text-2xl font-semibold text-gray-800 border-b pb-2">
+        <h2 className="pb-2 text-2xl font-semibold text-gray-800 border-b">
           {editing ? "Update Sale Details" : "Record New Sale"}
         </h2>
         {/* Property & Unit Selection */}
         <fieldset className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <legend className="text-lg font-medium text-gray-700 mb-2">
+          <legend className="mb-2 text-lg font-medium text-gray-700">
             Property & Unit
           </legend>
           <div>
@@ -267,7 +269,7 @@ export function SaleFormModal({ open, onClose, editing }) {
         </fieldset>
         {/* Buyer Info */}
         <fieldset>
-          <legend className="text-lg font-medium text-gray-700 mb-2">
+          <legend className="mb-2 text-lg font-medium text-gray-700">
             Buyer Information
           </legend>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -292,7 +294,7 @@ export function SaleFormModal({ open, onClose, editing }) {
         </fieldset>
         {/* Sale Details */}
         <fieldset>
-          <legend className="text-lg font-medium text-gray-700 mb-2">
+          <legend className="mb-2 text-lg font-medium text-gray-700">
             Sale Details
           </legend>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -390,7 +392,7 @@ export function SaleFormModal({ open, onClose, editing }) {
         </fieldset>
         {/* Agent Info */}
         <fieldset>
-          <legend className="text-lg font-medium text-gray-700 mb-2">
+          <legend className="mb-2 text-lg font-medium text-gray-700">
             Agent Information
           </legend>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -453,11 +455,11 @@ export function SaleFormModal({ open, onClose, editing }) {
 export function SaleViewModal({ open, onClose, data }) {
   if (!open || !data) return null;
   return (
-    <div className="fixed inset-0 z-50 grid p-4 bg-black/60 place-items-center overflow-y-auto">
+    <div className="fixed inset-0 z-50 grid p-4 overflow-y-auto bg-black/60 place-items-center">
       <div className="w-full max-w-xl p-6 my-8 space-y-4 bg-white rounded-lg shadow-xl">
         {" "}
         {/* Wider modal */}
-        <h2 className="text-2xl font-semibold text-center text-gray-800 border-b pb-2">
+        <h2 className="pb-2 text-2xl font-semibold text-center text-gray-800 border-b">
           View Sale Details
         </h2>
         <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
@@ -536,7 +538,7 @@ function Input({
 // Updated Read component
 function Read({ label, value, isTextArea = false }) {
   const displayValue = value || (
-    <span className="text-gray-400 italic">N/A</span>
+    <span className="italic text-gray-400">N/A</span>
   );
   return (
     <div>
@@ -546,7 +548,7 @@ function Read({ label, value, isTextArea = false }) {
           {displayValue}
         </div>
       ) : (
-        <div className="mt-1 p-2 w-full text-sm text-gray-700 bg-gray-100 border border-gray-200 rounded-md">
+        <div className="w-full p-2 mt-1 text-sm text-gray-700 bg-gray-100 border border-gray-200 rounded-md">
           {displayValue}
         </div>
       )}
