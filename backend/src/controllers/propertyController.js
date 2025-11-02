@@ -1,8 +1,10 @@
+// controllers/propertyController.js
 const Property = require("../models/Property");
 const Unit = require("../models/Unit"); // Imported for the delete hook
 const { isYouTubeUrl } = require("../utils/validate");
 const { uploadBuffer } = require("../configs/cloudinary");
 const { pick, ensureArrayStrings } = require("../utils/helpers");
+// --- (fs and path are not needed for this change) ---
 
 // Create a new Property (Building/Complex)
 async function createProperty(req, res, next) {
@@ -70,9 +72,20 @@ async function updateProperty(req, res, next) {
     const { id } = req.params;
     const b = req.body || {};
 
-    if (b.videoTours)
+    // --- START of ARRAY FIELD HANDLING FIX ---
+    // Handle array fields explicitly to ensure they can be cleared (set to [])
+    if (b.videoTours !== undefined) {
       b.videoTours = ensureArrayStrings(b.videoTours).filter(isYouTubeUrl);
-    if (b.amenities) b.amenities = ensureArrayStrings(b.amenities);
+    }
+    if (b.amenities !== undefined) {
+      b.amenities = ensureArrayStrings(b.amenities);
+    }
+    // IMPORTANT: Allow 'photos' array to be cleared or replaced via update
+    // Note: The main photo upload is via uploadPhotos, but this allows clearing the list.
+    if (b.photos !== undefined) {
+      b.photos = ensureArrayStrings(b.photos);
+    }
+    // --- END of ARRAY FIELD HANDLING FIX ---
 
     // List of fields allowed to be updated on the Property
     const allowed = [
@@ -90,7 +103,7 @@ async function updateProperty(req, res, next) {
       "assignedAgentPhone",
       "listedDate",
       "thumbnail",
-      "photos",
+      "photos", // Allow photos array to be updated/cleared
       "siteMap",
       "propertyType",
     ];
@@ -175,21 +188,25 @@ async function uploadThumbnail(req, res, next) {
 }
 
 // Upload photos for the Property (building, lobby, pool, etc.)
+// --- UPDATED: This now APPENDS photos instead of replacing ---
 async function uploadPhotos(req, res, next) {
   try {
     if (!req.files || !req.files.length)
       return res.status(400).json({ message: "No files" });
+
+    const prop = await Property.findById(req.params.id);
+    if (!prop) return res.status(404).json({ message: "Not found" });
+
     const uploads = await Promise.all(
       req.files.map((f) => uploadBuffer(f.buffer, "properties/photos", "image"))
     );
-    const urls = uploads.map((u) => u.secure_url);
-    const doc = await Property.findByIdAndUpdate(
-      req.params.id,
-      { photos: urls }, // Replaces entire array
-      { new: true }
-    );
-    if (!doc) return res.status(404).json({ message: "Not found" });
-    res.json(doc);
+    const newUrls = uploads.map((u) => u.secure_url);
+
+    // Append new photos to existing ones
+    prop.photos = [...(prop.photos || []), ...newUrls];
+    await prop.save();
+
+    res.json(prop);
   } catch (e) {
     next(e);
   }
@@ -218,6 +235,42 @@ async function uploadSiteMap(req, res, next) {
     );
     if (!doc) return res.status(404).json({ message: "Not found" });
     res.json(doc);
+  } catch (e) {
+    next(e);
+  }
+}
+
+// --- NEW: Delete Thumbnail ---
+async function deleteThumbnail(req, res, next) {
+  try {
+    const doc = await Property.findByIdAndUpdate(
+      req.params.id,
+      { $set: { thumbnail: null } }, // Set thumbnail field to null
+      { new: true }
+    );
+    if (!doc) return res.status(404).json({ message: "Not found" });
+    // Note: This does not delete the file from Cloudinary, only removes the reference.
+    // Deleting from Cloudinary would require its SDK and the public_id.
+    res.json({ message: "Thumbnail removed", doc });
+  } catch (e) {
+    next(e);
+  }
+}
+
+// --- NEW: Delete a specific Photo ---
+async function deletePhoto(req, res, next) {
+  try {
+    const { photoUrl } = req.body; // Get the URL from the request body
+    if (!photoUrl) {
+      return res.status(400).json({ message: "No photoUrl provided" });
+    }
+    const doc = await Property.findByIdAndUpdate(
+      req.params.id,
+      { $pull: { photos: photoUrl } }, // Remove the specific URL from the photos array
+      { new: true }
+    );
+    if (!doc) return res.status(404).json({ message: "Not found" });
+    res.json({ message: "Photo removed", doc });
   } catch (e) {
     next(e);
   }
@@ -313,4 +366,7 @@ module.exports = {
   uploadPhotos,
   uploadSiteMap,
   getFeaturedProperties,
+  // --- NEW EXPORTS ---
+  deleteThumbnail,
+  deletePhoto,
 };

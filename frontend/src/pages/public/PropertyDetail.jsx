@@ -270,12 +270,15 @@ function UnitRow({ unit }) {
     price,
     status,
     photos = [],
+    thumbnail,
     specifications = {},
     _id,
   } = unit;
   const { bedrooms, bathrooms, floorArea } = specifications;
   const cover =
-    photos?.[0] || "https://via.placeholder.com/640x360?text=No+Photo";
+    thumbnail ||
+    photos?.[0] ||
+    "https://via.placeholder.com/640x360?text=No+Photo";
   return (
     <Link
       to={`/unit/${_id}`}
@@ -284,16 +287,12 @@ function UnitRow({ unit }) {
       <img src={cover} className="object-cover w-24 h-24 rounded" alt="" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between">
-          <div className="font-semibold truncate">
-            {unitNumber || "Unit"}
-          </div>
+          <div className="font-semibold truncate">{unitNumber || "Unit"}</div>
           <div className="ml-2 font-semibold text-brand-primary">
             ₱ {Number(price || 0).toLocaleString()}
           </div>
         </div>
-        <div className="mt-1 text-xs tracking-wide uppercase">
-          {status}
-        </div>
+        <div className="mt-1 text-xs tracking-wide uppercase">{status}</div>
         <div className="mt-1 text-sm text-neutral-700">
           {bedrooms ? `${bedrooms} Bed` : ""}
           {bathrooms ? ` • ${bathrooms} Bath` : ""}

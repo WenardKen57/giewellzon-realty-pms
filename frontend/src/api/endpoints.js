@@ -31,12 +31,19 @@ export const endpoints = {
     createUnit: (propertyId) => `${API_BASE}/properties/${propertyId}/units`,
     provinces: `${API_BASE}/locations/provinces`,
     cities: (province) => `${API_BASE}/locations/provinces/${province}/cities`,
+    // --- NEW ---
+    thumbnail: (id) => `${API_BASE}/properties/${id}/thumbnail`, // For DELETE
+    photo: (id) => `${API_BASE}/properties/${id}/photo`, // For DELETE
   },
 
   units: {
     root: `${API_BASE}/units`, // Your NEW main search endpoint (GET)
     byId: (id) => `${API_BASE}/units/${id}`, // GET, PATCH, DELETE one unit
     uploadPhotos: (id) => `${API_BASE}/units/${id}/upload-photos`,
+    photo: (id) => `${API_BASE}/units/${id}/photo`, // For DELETE photo
+    // --- NEW ---
+    uploadThumbnail: (id) => `${API_BASE}/units/${id}/upload-thumbnail`,
+    thumbnail: (id) => `${API_BASE}/units/${id}/thumbnail`, // For DELETE thumbnail
   },
 
   sales: {

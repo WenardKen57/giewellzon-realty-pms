@@ -24,7 +24,8 @@ const UnitSchema = new mongoose.Schema(
     soldDate: { type: Date },
 
     // Unit-specific media
-    photos: { type: [String], default: [] },
+    thumbnail: { type: String }, // <-- NEW: Dedicated thumbnail field
+    photos: { type: [String], default: [] }, // This is now just for the gallery
     videoTours: { type: [String], default: [] },
     description: { type: String, trim: true }, // Description specific to this unit
     amenities: { type: [String], default: [] }, // Amenities inside this unit
