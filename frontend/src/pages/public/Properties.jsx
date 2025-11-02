@@ -148,7 +148,7 @@ export default function Properties() {
             Showing {properties.length} properties
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3 items-stretch">
+          <div className="grid items-stretch gap-4 md:grid-cols-3">
             {properties.map((prop) => (
               <PropertyCard key={prop._id} property={prop} />
             ))}
@@ -179,12 +179,12 @@ function PropertyCard({ property }) {
         className="object-cover w-full h-40"
         alt={property.propertyName}
       />
-      <div className="p-4 flex-1 flex flex-col">
+      <div className="flex flex-col flex-1 p-4">
         <div className="space-y-1">
           <div className="font-semibold">{property.propertyName}</div>
           <div className="text-sm text-neutral-600">{location}</div>
           {property.propertyType && (
-            <div className="text-xs uppercase tracking-wide text-brand-primary">
+            <div className="text-xs tracking-wide uppercase text-brand-primary">
               {property.propertyType}
             </div>
           )}
