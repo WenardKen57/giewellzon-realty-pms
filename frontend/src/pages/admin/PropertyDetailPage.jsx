@@ -8,7 +8,7 @@ import UnitEditor from "./UnitEditor";
 import PropertyEditor from "./PropertyEditor";
 
 // lucide icons used for consistent design
-import { ArrowLeft, Plus, Search, Filter, Edit3, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Search, Filter, Edit3, Trash2, X } from "lucide-react";
 
 
 export default function PropertyDetailPage() {
@@ -20,6 +20,11 @@ export default function PropertyDetailPage() {
   const [isUnitEditorOpen, setIsUnitEditorOpen] = useState(false);
   const [editingUnit, setEditingUnit] = useState(null);
   const [isPropertyEditorOpen, setIsPropertyEditorOpen] = useState(false);
+
+  // --- NEW: State for delete confirmation modal ---
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [unitToDelete, setUnitToDelete] = useState(null); // Stores the unit object
+  const [deleting, setDeleting] = useState(false); // Loading state for delete action
 
   // Unit filters
   const [unitFilters, setUnitFilters] = useState({
@@ -63,19 +68,35 @@ export default function PropertyDetailPage() {
     }
   }
 
-  // Delete handler
-  async function handleDeleteUnit(unit) {
-    if (!window.confirm(`Are you sure you want to delete unit "${unit.unitNumber}"?`)) {
-      return;
-    }
+  // --- UPDATED: Delete handler now opens the modal ---
+  function handleDeleteUnit(unit) {
+    setUnitToDelete(unit);
+    setIsConfirmModalOpen(true);
+  }
+
+  // --- NEW: Function to handle the actual deletion ---
+  async function confirmDeleteUnit() {
+    if (!unitToDelete) return;
+
+    setDeleting(true);
     try {
-      await UnitsAPI.del(unit._id);
-      toast.success("Unit deleted successfully!");
+      await UnitsAPI.del(unitToDelete._id);
+      toast.success(`Unit "${unitToDelete.unitNumber}" deleted successfully!`);
       loadProperty();
     } catch (err) {
       toast.error("Failed to delete unit.");
       console.error(err);
+    } finally {
+      setDeleting(false);
+      setIsConfirmModalOpen(false);
+      setUnitToDelete(null);
     }
+  }
+
+  // --- NEW: Function to cancel deletion ---
+  function cancelDeleteUnit() {
+    setIsConfirmModalOpen(false);
+    setUnitToDelete(null);
   }
 
   // Filtered units using useMemo (unchanged logic)
@@ -321,6 +342,94 @@ export default function PropertyDetailPage() {
         onClose={handlePropertyEditorClose}
         editing={property}
       />
+
+      {/* --- NEW: Confirmation Modal --- */}
+      <ConfirmDeleteModal
+        open={isConfirmModalOpen}
+        onClose={cancelDeleteUnit}
+        onConfirm={confirmDeleteUnit}
+        unitName={unitToDelete?.unitNumber || ""}
+        isLoading={deleting}
+      />
+    </div>
+  );
+}
+
+// --- NEW: Custom Confirmation Modal Component ---
+function ConfirmDeleteModal({ open, onClose, onConfirm, unitName, isLoading }) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 grid p-4 overflow-y-auto bg-black/60 place-items-center">
+      <div
+        className="w-full max-w-md p-6 bg-white rounded-xl shadow-2xl ring-1 ring-black/5"
+        aria-modal="true"
+        role="dialog"
+      >
+        <header className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-red-100 text-red-600 shadow">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800">
+                Confirm Unit Deletion
+              </h2>
+              <p className="text-sm text-gray-500 mt-0.5">
+                Are you absolutely sure?
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center justify-center w-9 h-9 rounded-md text-gray-600 hover:bg-gray-100 transition"
+            aria-label="Close"
+            disabled={isLoading}
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </header>
+
+        <div className="mt-4 text-sm text-gray-700 space-y-3">
+          <p>
+            You are about to delete the unit:
+            <strong className="block text-base text-gray-900 my-1">{unitName}</strong>
+          </p>
+          <p className="p-3 text-sm font-medium text-red-800 bg-red-50 border border-red-200 rounded-lg">
+            <strong>Warning:</strong> This action cannot be undone.
+          </p>
+        </div>
+
+        <div className="flex justify-end gap-3 pt-6 border-t mt-6">
+          <button
+            type="button"
+            className="px-3 py-2 rounded-md text-sm font-medium bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100 transition"
+            onClick={onClose}
+            disabled={isLoading}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-white font-semibold shadow-md transition bg-red-600 hover:bg-red-700 disabled:opacity-60"
+            onClick={onConfirm}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                  <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" strokeLinecap="round" className="opacity-75" />
+                </svg>
+                Deleting...
+              </>
+            ) : (
+              "Confirm Delete"
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
