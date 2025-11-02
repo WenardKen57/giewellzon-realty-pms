@@ -194,7 +194,7 @@ export default function DashboardPreview({ previewCount = 6 }) {
           </div>
 
           <p className="text-sm text-neutral-500 mt-3">
-          Summary of closed deals, revenue and key sales.
+            Summary of closed deals, revenue and key sales.
           </p>
         </div>
 
@@ -267,8 +267,9 @@ function InfoTile({ title, value, description, variant = "default", icon, extra 
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between">
-          <p className="text-sm text-neutral-500">{title}</p>
-          <div className="text-sm font-semibold text-gray-800">{value ?? 0}</div>
+          {/* [EDIT] Made label bold and darker */}
+          <p className="text-sm font-semibold text-neutral-600">{title}</p>
+          <div className="text-lg font-bold text-gray-900">{value ?? 0}</div>
         </div>
         <p className="text-xs text-neutral-500 mt-1 truncate">{description}</p>
         {extra}
@@ -345,8 +346,9 @@ function StatCard({ title, value, variant = "default" }) {
         {statIconSVG(variant)}
       </div>
       <div>
-        <p className="text-gray-500 text-sm">{title}</p>
-        <h2 className={`mt-1 text-2xl font-semibold ${isMoney ? "text-green-700" : "text-gray-800"}`}>
+        {/* [EDIT] Made label bold and darker */}
+        <p className="text-gray-600 text-sm font-semibold">{title}</p>
+        <h2 className={`mt-1 text-3xl font-bold ${isMoney ? "text-green-700" : "text-gray-900"}`}>
           {value ?? 0}
         </h2>
       </div>
@@ -512,3 +514,4 @@ function formatShortDate(iso) {
     return iso;
   }
 }
+
