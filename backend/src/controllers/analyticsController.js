@@ -95,6 +95,10 @@ async function salesTrends(req, res, next) {
       year = new Date().getFullYear(),
       dateField = "closingDate",
       status = "closed",
+      propertyId,
+      financingType,
+      source,
+      agentName,
     } = req.query;
     const dateFieldName =
       dateField === "saleDate" ? "$saleDate" : "$closingDate"; // Use closingDate by default for revenue recognition
@@ -118,6 +122,23 @@ async function salesTrends(req, res, next) {
         $gte: new Date(`${year}-01-01T00:00:00.000Z`),
         $lte: new Date(`${year}-12-31T23:59:59.999Z`),
       };
+    }
+
+    // Optional slicers
+    if (propertyId) {
+      // accept comma-separated list
+      const ids = String(propertyId)
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((s) => new mongoose.Types.ObjectId(s));
+      matchQuery.propertyId = ids.length > 1 ? { $in: ids } : ids[0];
+    }
+    if (financingType) matchQuery.financingType = financingType;
+    if (source) matchQuery.source = source;
+    if (agentName) {
+      // allow partial match, case-insensitive
+      matchQuery.agentName = { $regex: agentName, $options: "i" };
     }
 
     let groupBy;
@@ -190,22 +211,38 @@ async function propertyPerformance(req, res, next) {
     const salesDateField =
       req.query.dateField === "saleDate" ? "saleDate" : "closingDate";
 
+    // Build property filters (by IDs or location)
+    const { propertyId, city, province } = req.query;
+    let propertyIdsFilter = null; // array of ObjectId or null
+
+    if (propertyId) {
+      const ids = String(propertyId)
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((s) => new mongoose.Types.ObjectId(s));
+      if (ids.length) propertyIdsFilter = ids;
+    }
+
     // 1. Aggregated Unit Counts per Property
-    const unitCountsAgg = Unit.aggregate([
-      {
-        $group: {
-          _id: "$property", // Group by the parent property ID
-          totalUnits: { $sum: 1 },
-          availableUnits: {
-            $sum: { $cond: [{ $eq: ["$status", "available"] }, 1, 0] },
-          },
-          soldUnits: { $sum: { $cond: [{ $eq: ["$status", "sold"] }, 1, 0] } },
-          rentedUnits: {
-            $sum: { $cond: [{ $eq: ["$status", "rented"] }, 1, 0] },
-          },
+    const unitPipeline = [];
+    if (propertyIdsFilter) {
+      unitPipeline.push({ $match: { property: { $in: propertyIdsFilter } } });
+    }
+    unitPipeline.push({
+      $group: {
+        _id: "$property", // Group by the parent property ID
+        totalUnits: { $sum: 1 },
+        availableUnits: {
+          $sum: { $cond: [{ $eq: ["$status", "available"] }, 1, 0] },
+        },
+        soldUnits: { $sum: { $cond: [{ $eq: ["$status", "sold"] }, 1, 0] } },
+        rentedUnits: {
+          $sum: { $cond: [{ $eq: ["$status", "rented"] }, 1, 0] },
         },
       },
-    ]);
+    });
+    const unitCountsAgg = Unit.aggregate(unitPipeline);
 
     // 2. Aggregated CLOSED Sales Stats per Property
     const salesMatch = { softDeleted: false, status: "closed" };
@@ -214,6 +251,7 @@ async function propertyPerformance(req, res, next) {
       if (dateFrom) salesMatch[salesDateField].$gte = new Date(dateFrom);
       if (dateTo) salesMatch[salesDateField].$lte = new Date(dateTo);
     }
+    if (propertyIdsFilter) salesMatch.propertyId = { $in: propertyIdsFilter };
 
     const salesStatsAgg = Sale.aggregate([
       { $match: salesMatch },
@@ -229,16 +267,55 @@ async function propertyPerformance(req, res, next) {
     ]);
 
     // 3. Get Property Details
-    const propertiesQuery = Property.find({})
+    const propQuery = {};
+    if (city) propQuery.city = city;
+    if (province) propQuery.province = province;
+    const propertiesQuery = Property.find(propQuery)
       .select("propertyName city province createdAt")
       .lean();
 
     // Execute in parallel
-    const [unitCounts, salesStats, properties] = await Promise.all([
-      unitCountsAgg,
-      salesStatsAgg,
-      propertiesQuery,
-    ]);
+    let unitCounts, salesStats, properties;
+
+    // If no explicit propertyId provided but location filters are provided,
+    // we still need the property IDs to constrain unit/sales aggregations.
+    if (!propertyIdsFilter && (city || province)) {
+      const filteredProps = await propertiesQuery;
+      const ids = filteredProps.map((p) => p._id);
+      propertyIdsFilter = ids.length ? ids : null;
+      if (propertyIdsFilter) {
+        // re-run aggregations with property filter
+        unitCounts = await Unit.aggregate([
+          { $match: { property: { $in: propertyIdsFilter } } },
+          ...unitPipeline.filter((p) => p.$group),
+        ]);
+        salesStats = await Sale.aggregate([
+          { $match: { ...salesMatch, propertyId: { $in: propertyIdsFilter } } },
+          {
+            $group: {
+              _id: "$propertyId",
+              totalClosedSales: { $sum: 1 },
+              totalClosedRevenue: { $sum: "$salePrice" },
+              avgClosedSalePrice: { $avg: "$salePrice" },
+              totalCommissionPaid: { $sum: "$commissionAmount" },
+            },
+          },
+        ]);
+        properties = filteredProps;
+      } else {
+        [unitCounts, salesStats, properties] = await Promise.all([
+          unitCountsAgg,
+          salesStatsAgg,
+          propertiesQuery,
+        ]);
+      }
+    } else {
+      [unitCounts, salesStats, properties] = await Promise.all([
+        unitCountsAgg,
+        salesStatsAgg,
+        propertiesQuery,
+      ]);
+    }
 
     // Create maps for efficient merging
     const unitMap = new Map(unitCounts.map((u) => [String(u._id), u]));
@@ -277,7 +354,7 @@ async function propertyPerformance(req, res, next) {
 // Aggregates sales performance by agent name.
 async function agentPerformance(req, res, next) {
   try {
-    const { dateFrom, dateTo, status = "closed" } = req.query; // Default to closed sales
+    const { dateFrom, dateTo, status = "closed", propertyId, financingType, source, agentName } = req.query; // Default to closed sales
 
     const matchQuery = {
       softDeleted: false,
@@ -293,6 +370,19 @@ async function agentPerformance(req, res, next) {
       if (dateFrom) matchQuery[dateField].$gte = new Date(dateFrom);
       if (dateTo) matchQuery[dateField].$lte = new Date(dateTo);
     }
+
+    // Additional slicers
+    if (propertyId) {
+      const ids = String(propertyId)
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((s) => new mongoose.Types.ObjectId(s));
+      matchQuery.propertyId = ids.length > 1 ? { $in: ids } : ids[0];
+    }
+  if (financingType) matchQuery.financingType = financingType;
+  if (source) matchQuery.source = source;
+  if (agentName) matchQuery.agentName = { $regex: agentName, $options: "i" };
 
     const performance = await Sale.aggregate([
       { $match: matchQuery },

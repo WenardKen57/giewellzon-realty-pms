@@ -21,7 +21,9 @@ const BLANK_FORM = {
 export default function UnitEditor({ open, onClose, editing, propertyId }) {
   const [form, setForm] = useState(BLANK_FORM);
   const [errors, setErrors] = useState({});
-  const [photos, setPhotos] = useState([]); // For unit-specific photos
+  const [thumbnail, setThumbnail] = useState(null); // Single unit thumbnail (first photo)
+  const [thumbPreview, setThumbPreview] = useState("");
+  const [photos, setPhotos] = useState([]); // Additional unit photos
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -40,10 +42,23 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
         // Adding a new unit: reset the form
         setForm(BLANK_FORM);
         setPhotos([]);
+        setThumbnail(null);
+        setThumbPreview("");
         setErrors({});
       }
     }
   }, [editing, open]);
+
+  // Build a preview URL when a thumbnail file is selected
+  useEffect(() => {
+    if (!thumbnail) {
+      setThumbPreview("");
+      return;
+    }
+    const url = URL.createObjectURL(thumbnail);
+    setThumbPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [thumbnail]);
 
   if (!open) return null;
 
@@ -92,10 +107,13 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
 
       const id = res._id || editing._id;
 
-      // Upload unit-specific photos
-      if (photos?.length > 0) {
-        await UnitsAPI.uploadPhotos(id, photos);
+      // Upload thumbnail + photos (thumbnail first)
+      const filesToUpload = [thumbnail, ...(photos || [])].filter(Boolean);
+      if (filesToUpload.length > 0) {
+        await UnitsAPI.uploadPhotos(id, filesToUpload);
         setPhotos([]);
+        setThumbnail(null);
+        setThumbPreview("");
       }
 
       toast.success(
@@ -209,14 +227,40 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
         </div>
 
         {/* === UNIT MEDIA === */}
-        <div>
-          <div className="mb-2 font-medium">Unit-Specific Photos</div>
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={(e) => setPhotos(Array.from(e.target.files || []))}
-          />
+        <div className="grid gap-4 md:grid-cols-2">
+          {/* Thumbnail (single) */}
+          <div>
+            <div className="mb-2 font-medium">Unit Thumbnail</div>
+            {thumbPreview ? (
+              <img
+                src={thumbPreview}
+                alt="Thumbnail preview"
+                className="object-cover w-full h-40 mb-2 border rounded"
+              />
+            ) : null}
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setThumbnail(e.target.files?.[0] || null)}
+            />
+            <p className="mt-1 text-xs text-neutral-600">
+              This image will be used as the unit cover (first photo).
+            </p>
+          </div>
+
+          {/* Additional photos */}
+          <div>
+            <div className="mb-2 font-medium">Unit Photos</div>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) => setPhotos(Array.from(e.target.files || []))}
+            />
+            <p className="mt-1 text-xs text-neutral-600">
+              You can select multiple images; they will appear after the thumbnail.
+            </p>
+          </div>
         </div>
 
         {/* === BUTTONS === */}
@@ -243,7 +287,7 @@ function Field({ label, children, error }) {
     <div>
       <div className="mb-1 text-sm">{label}</div>
       {children}
-      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
     </div>
   );
 }
