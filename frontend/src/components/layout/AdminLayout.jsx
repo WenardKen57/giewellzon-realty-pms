@@ -10,9 +10,9 @@ import {
   User,
   LogOut,
   ChevronLeft,
-  Building as BuildingIcon, // For header icon
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext"; // Using the actual project hook
+import logo from "../../assets/client-logo.jpeg"; // <-- new: client logo
 
 // --- AdminSidebar Component ---
 // Helper component for sidebar links with tooltips
@@ -108,9 +108,13 @@ function AdminSidebar({
               isCollapsed ? "opacity-0 hidden" : "opacity-100 flex"
             }`}
           >
-            {/* Icon next to brand name */}
-            <div className="p-1.5 bg-brand-primary rounded-lg">
-              <BuildingIcon size={20} className="text-white" />
+            {/* Logo next to brand name (replaced building icon with actual image) */}
+            <div className="w-8 h-8 overflow-hidden rounded-md">
+              <img
+                src={logo}
+                alt="GIEWELLZON logo"
+                className="w-full h-full object-cover"
+              />
             </div>
             {/* Brand text changed from gradient to solid color */}
             <span
