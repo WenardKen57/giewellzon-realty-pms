@@ -25,7 +25,8 @@ import Dashboard from "./pages/admin/Dashboard.jsx";
 import PropertiesAdmin from "./pages/admin/PropertiesAdmin.jsx";
 import InquiriesAdmin from "./pages/admin/InquiriesAdmin.jsx";
 import SalesManagement from "./pages/admin/SalesManagement.jsx";
-import Analytics from "./pages/admin/Analytics.jsx";
+// import Analytics from "./pages/admin/Analytics.jsx"; // <-- REMOVED THIS
+import Reports from "./pages/admin/Reports.jsx"; // <-- ADDED THIS
 import Profile from "./pages/admin/Profile.jsx";
 import PropertyDetailPage from "./pages/admin/PropertyDetailPage.jsx";
 import UnitDetail from "./pages/public/UnitDetail";
@@ -77,7 +78,8 @@ export default function App() {
           <Route path="profile" element={<Profile />} />
           <Route path="inquiries" element={<InquiriesAdmin />} />
           <Route path="sales" element={<SalesManagement />} />
-          <Route path="reports" element={<Analytics />} />
+          {/* <Route path="reports" element={<Analytics />} /> */} {/* <-- CHANGED THIS */}
+          <Route path="reports" element={<Reports />} /> {/* <-- TO THIS */}
         </Route>
 
         {/* FALLBACK */}
