@@ -1,6 +1,7 @@
 const Sale = require("../models/Sale");
 const Property = require("../models/Property");
 const Unit = require("../models/Unit");
+const { isValidPHMobile } = require("../utils/validate");
 
 // Helper function to pick allowed properties from an object
 function pick(obj, keys) {
@@ -31,6 +32,20 @@ async function createSale(req, res, next) {
       return res
         .status(400)
         .json({ message: "Property associated with unit not found" });
+
+    // --- Phone validation (optional fields) ---
+    if (b.buyerPhone && !isValidPHMobile(String(b.buyerPhone))) {
+      return res.status(400).json({
+        message:
+          "Invalid buyer phone. Use PH mobile format like 09123456789 or +639123456789.",
+      });
+    }
+    if (b.agentPhone && !isValidPHMobile(String(b.agentPhone))) {
+      return res.status(400).json({
+        message:
+          "Invalid agent phone. Use PH mobile format like 09123456789 or +639123456789.",
+      });
+    }
 
     // --- FIX: Robust Date Parsing ---
     let saleDateObj = b.saleDate ? new Date(b.saleDate) : new Date(); // Default to now if empty
@@ -211,6 +226,20 @@ async function updateSale(req, res, next) {
       "source",
     ];
     const patch = pick(body, allowed);
+
+    // Validate phones if present in patch
+    if (patch.buyerPhone && !isValidPHMobile(String(patch.buyerPhone))) {
+      return res.status(400).json({
+        message:
+          "Invalid buyer phone. Use PH mobile format like 09123456789 or +639123456789.",
+      });
+    }
+    if (patch.agentPhone && !isValidPHMobile(String(patch.agentPhone))) {
+      return res.status(400).json({
+        message:
+          "Invalid agent phone. Use PH mobile format like 09123456789 or +639123456789.",
+      });
+    }
 
     if (patch.saleDate) patch.saleDate = new Date(patch.saleDate);
     if (patch.closingDate) patch.closingDate = new Date(patch.closingDate);

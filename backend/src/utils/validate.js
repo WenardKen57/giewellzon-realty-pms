@@ -11,5 +11,11 @@ function isYouTubeUrl(url) {
     return false;
   }
 }
+// Philippine mobile numbers: 09123456789, +639123456789, 639123456789
+function isValidPHMobile(input) {
+  if (!input || typeof input !== 'string') return false;
+  const cleaned = input.trim().replace(/[\s\-()]/g, '');
+  return /^(09\d{9}|\+?639\d{9})$/.test(cleaned);
+}
 
-module.exports = { isYouTubeUrl };
+module.exports = { isYouTubeUrl, isValidPHMobile };
