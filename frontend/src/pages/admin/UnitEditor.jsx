@@ -109,8 +109,53 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
 
   function validate() {
     const newErrors = {};
-    if (!form.price || isNaN(Number(form.price)) || Number(form.price) <= 0)
+
+    // Unit Number - required
+    if (!form.unitNumber || !String(form.unitNumber).trim()) {
+      newErrors.unitNumber = "Unit number/name is required.";
+    }
+
+    // Price - required, positive number
+    if (
+      form.price === "" ||
+      form.price === null ||
+      form.price === undefined ||
+      isNaN(Number(form.price)) ||
+      Number(form.price) <= 0
+    ) {
       newErrors.price = "Price must be a positive number.";
+    }
+
+    // Status - required and valid
+    const allowedStatus = ["available", "sold", "rented"];
+    if (!form.status || !allowedStatus.includes(form.status)) {
+      newErrors.status = "Status is required.";
+    }
+
+    // Specifications - required numeric fields (>= 0)
+    const specs = form.specifications || {};
+    const requiredNumeric = [
+      ["lotArea", "Lot area is required."],
+      ["floorArea", "Floor area is required."],
+      ["bedrooms", "Bedrooms is required."],
+      ["bathrooms", "Bathrooms is required."],
+      ["parking", "Parking is required."],
+    ];
+    for (const [key, msg] of requiredNumeric) {
+      const raw = specs[key];
+      const val = raw === "" ? NaN : Number(raw);
+      if (raw === "" || raw === null || raw === undefined || isNaN(val)) {
+        newErrors[key] = msg;
+      } else if (val < 0) {
+        newErrors[key] = "Must be zero or greater.";
+      }
+    }
+
+    // When creating, require a thumbnail selected
+    if (!editing && !newThumbnail) {
+      newErrors.thumbnail = "Thumbnail is required when adding a new unit.";
+    }
+
     return newErrors;
   }
 
@@ -221,6 +266,10 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
       onClose(true);
     } catch (err) {
       console.error(err);
+      const serverErrors = err?.response?.data?.errors;
+      if (serverErrors && typeof serverErrors === "object") {
+        setErrors(serverErrors);
+      }
       toast.error(err?.response?.data?.message || "Failed to save unit.");
     } finally {
       setLoading(false);
@@ -306,6 +355,7 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
               value={form.unitNumber}
               onChange={(e) => setForm((s) => ({ ...s, unitNumber: e.target.value }))}
               placeholder="e.g., Apt 101 or Main House"
+              required
             />
             {errors.unitNumber && <p className="text-xs text-red-500 mt-1">{errors.unitNumber}</p>}
           </div>
@@ -328,11 +378,13 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
               className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
               value={form.status}
               onChange={(e) => setForm((s) => ({ ...s, status: e.target.value }))}
+              required
             >
               <option value="available">Available</option>
               <option value="sold">Sold</option>
               <option value="rented">Rented</option>
             </select>
+            {errors.status && <p className="text-xs text-red-500 mt-1">{errors.status}</p>}
           </div>
         </section>
 
@@ -340,11 +392,11 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
         <section>
           <div className="mb-2 font-medium text-gray-700">Specifications</div>
           <div className="grid gap-3 md:grid-cols-3">
-            <Spec label="Lot Area (sqm)" value={form.specifications.lotArea} onChange={(v) => setSpec("lotArea", v)} />
-            <Spec label="Floor Area (sqm)" value={form.specifications.floorArea} onChange={(v) => setSpec("floorArea", v)} />
-            <Spec label="Bedrooms" value={form.specifications.bedrooms} onChange={(v) => setSpec("bedrooms", v)} />
-            <Spec label="Bathrooms" value={form.specifications.bathrooms} onChange={(v) => setSpec("bathrooms", v)} />
-            <Spec label="Parking" value={form.specifications.parking} onChange={(v) => setSpec("parking", v)} />
+            <Spec label="Lot Area (sqm)" value={form.specifications.lotArea} onChange={(v) => setSpec("lotArea", v)} error={errors.lotArea} />
+            <Spec label="Floor Area (sqm)" value={form.specifications.floorArea} onChange={(v) => setSpec("floorArea", v)} error={errors.floorArea} />
+            <Spec label="Bedrooms" value={form.specifications.bedrooms} onChange={(v) => setSpec("bedrooms", v)} error={errors.bedrooms} />
+            <Spec label="Bathrooms" value={form.specifications.bathrooms} onChange={(v) => setSpec("bathrooms", v)} error={errors.bathrooms} />
+            <Spec label="Parking" value={form.specifications.parking} onChange={(v) => setSpec("parking", v)} error={errors.parking} />
           </div>
         </section>
 
@@ -383,6 +435,9 @@ export default function UnitEditor({ open, onClose, editing, propertyId }) {
                 </div>
               </div>
             </div>
+            {errors.thumbnail && (
+              <p className="text-xs text-red-500 mt-1">{errors.thumbnail}</p>
+            )}
           </div>
 
           <div>
@@ -497,11 +552,12 @@ function Field({ label, children, error }) {
   );
 }
 
-function Spec({ label, value, onChange }) {
+function Spec({ label, value, onChange, error }) {
   return (
     <div>
       <div className="mb-1 text-sm text-gray-600">{label}</div>
-      <input className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" value={value || ""} type="number" min="0" onChange={(e) => onChange(e.target.value)} />
+      <input className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" value={value || ""} type="number" min="0" onChange={(e) => onChange(e.target.value)} required />
+      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
     </div>
   );
 }
