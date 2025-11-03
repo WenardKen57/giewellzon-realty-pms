@@ -17,12 +17,57 @@ async function createUnit(req, res, next) {
       return res.status(404).json({ message: "Property not found" });
     }
 
+    // Validate required fields
+    const errors = {};
+    if (!b.unitNumber || !String(b.unitNumber).trim()) {
+      errors.unitNumber = "Unit number/name is required";
+    }
+    const priceNum = Number(b.price);
+    if (b.price === undefined || b.price === null || isNaN(priceNum) || priceNum <= 0) {
+      errors.price = "Price must be a positive number";
+    }
+    const allowedStatus = ["available", "sold", "rented"];
+    if (!b.status || !allowedStatus.includes(b.status)) {
+      errors.status = "Status is required";
+    }
+    const specs = b.specifications || {};
+    const specFields = [
+      ["lotArea", "Lot area is required"],
+      ["floorArea", "Floor area is required"],
+      ["bedrooms", "Bedrooms is required"],
+      ["bathrooms", "Bathrooms is required"],
+      ["parking", "Parking is required"],
+    ];
+    for (const [key, msg] of specFields) {
+      const val = specs[key];
+      const num = Number(val);
+      if (val === undefined || val === null || val === "" || isNaN(num)) {
+        errors[key] = msg;
+      } else if (num < 0) {
+        errors[key] = "Must be zero or greater";
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      return res.status(400).json({ message: "Validation failed", errors });
+    }
+
+    // Normalize specifications to numbers
+    const normalizedSpecs = {
+      lotArea: Number(specs.lotArea),
+      floorArea: Number(specs.floorArea),
+      bedrooms: Number(specs.bedrooms),
+      bathrooms: Number(specs.bathrooms),
+      parking: Number(specs.parking),
+      ...(specs.yearBuilt != null ? { yearBuilt: Number(specs.yearBuilt) } : {}),
+    };
+
     const doc = await Unit.create({
       property: propertyId,
-      unitNumber: b.unitNumber,
-      price: b.price != null ? Number(b.price) : 0,
-      status: b.status || "available",
-      specifications: b.specifications || {},
+      unitNumber: String(b.unitNumber).trim(),
+      price: priceNum,
+      status: b.status,
+      specifications: normalizedSpecs,
       photos: ensureArrayStrings(b.photos),
       videoTours: ensureArrayStrings(b.videoTours).filter(isYouTubeUrl),
       soldDate:
