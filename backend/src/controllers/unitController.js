@@ -49,7 +49,7 @@ async function createUnit(req, res, next) {
     }
 
     if (Object.keys(errors).length > 0) {
-      return res.status(400).json({ message: "Validation failed", errors });
+      return res.status(400).json({ message: "Please fill all required fields", errors });
     }
 
     // Normalize specifications to numbers
