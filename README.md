@@ -1,40 +1,51 @@
-# Real Estate Listing System
+# 🏡 Real Estate Listing System
 
-A web-based platform for publishing, browsing, and managing property listings. It allows sellers or agents to post detailed property information, including photos, pricing, and location data, while enabling buyers to search, filter, and save listings. The system streamlines real estate discovery and communication between buyers and sellers.
+A full-stack web platform for publishing, browsing, and managing real estate listings. The system enables sellers and agents to post detailed property information—including images, pricing, and location data—while allowing buyers to explore, filter, and save listings with ease.  
+Designed to streamline real-estate discovery and communication.
 
-# Table of content
+---
 
-- [Images](#images)
-- [Install](#install)
-- [Preview](#preview)
+## 📌 Table of Contents
 
-## Images
+- [Features](#features)
+- [Screenshots](#screenshots)
+- [Installation](#installation)
+- [Live Preview](#live-preview)
 
-### Home
+---
 
+## ✨ Features
+
+- **Property Listings** – Add photos, pricing, location, and detailed descriptions.
+- **Advanced Search & Filters** – Easily find properties by location, price, and more.
+- **Responsive UI** – Optimized for desktop and mobile browsing.
+- **Seller/Agent Dashboard** – Manage listings efficiently.
+- **Buyer Tools** – Save favorites and explore detailed property pages.
+
+---
+
+## 🖼️ Screenshots
+
+### 🏠 Home Page
 ![home](./screenshots/1.jpg)
 
-### Listing
-
+### 📋 Listing Page
 ![listing](./screenshots/2.jpg)
 
-### Property detail
-
+### 🏘️ Property Detail
 ![detail](./screenshots/3.jpg)
 
-## Install
+---
 
-```
+## ⚙️ Installation
+
+```bash
+# Backend
 cd backend
 npm install
 npm run dev
 
-# new terminal
-cd front end
+# Frontend (open a new terminal)
+cd frontend
 npm install
 npm run dev
-```
-
-## Preview
-
-[Link](https://giewellzon-realty-pms-1.onrender.com)
